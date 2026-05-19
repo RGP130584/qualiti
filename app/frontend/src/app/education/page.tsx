@@ -369,10 +369,20 @@ export default function EducationPage() {
             </div>
 
             <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              {/* VÍDEO PLAYER */}
+              {/* VÍDEO PLAYER / YOUTUBE EMBED */}
               {activeLesson.tipo === 'video' && (
-                <div style={{ background: '#000', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 10px 20px rgba(0,0,0,0.3)' }}>
-                  <video controls src={activeLesson.conteudo_url} style={{ width: '100%', maxHeight: '450px', display: 'block' }} autoPlay />
+                <div style={{ background: '#000', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 10px 20px rgba(0,0,0,0.3)', position: 'relative', width: '100%', paddingTop: activeLesson.conteudo_url.includes('youtube.com') || activeLesson.conteudo_url.includes('youtu.be') ? '56.25%' : '0' }}>
+                  {activeLesson.conteudo_url.includes('youtube.com') || activeLesson.conteudo_url.includes('youtu.be') ? (
+                    <iframe 
+                      src={activeLesson.conteudo_url} 
+                      title={activeLesson.titulo}
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                      allowFullScreen 
+                    />
+                  ) : (
+                    <video controls src={activeLesson.conteudo_url} style={{ width: '100%', maxHeight: '450px', display: 'block' }} autoPlay />
+                  )}
                 </div>
               )}
 

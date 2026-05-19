@@ -486,7 +486,7 @@ export async function initDb() {
       const resLicao1 = await client.query(`
         INSERT INTO education_lessons (modulo_id, titulo, tipo, conteudo_url, duracao_minutos, ordem)
         VALUES 
-        ($1, 'Vídeo Institucional de Boas-Vindas', 'video', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', 15, 1),
+        ($1, 'Vídeo Institucional de Boas-Vindas (YouTube)', 'video', 'https://www.youtube.com/embed/5Peo-ivmupE', 15, 1),
         ($1, 'Manual da Qualidade e Estrutura ONA', 'pdf', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', 30, 2)
         RETURNING id;
       `, [m1]);
@@ -495,7 +495,7 @@ export async function initDb() {
       const resLicao2 = await client.query(`
         INSERT INTO education_lessons (modulo_id, titulo, tipo, conteudo_url, duracao_minutos, ordem)
         VALUES 
-        ($1, 'Protocolos Internacionais de Segurança do Paciente', 'video', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', 25, 1),
+        ($1, 'Protocolos Internacionais de Segurança do Paciente (YouTube)', 'video', 'https://www.youtube.com/embed/tgbNymZ7vqY', 25, 1),
         ($1, 'Quiz de Avaliação de Integração', 'quiz', 'quiz_integration_01', 15, 2)
         RETURNING id;
       `, [m2]);
