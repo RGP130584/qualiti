@@ -18,6 +18,8 @@ import aiRoutes from './routes/ai';
 import fhirRoutes from './routes/fhir';
 import auditRoutes from './routes/audit';
 import adminRoutes from './routes/admin';
+import okrsRoutes from './routes/okrs';
+import educationRoutes from './routes/education';
 import { onaV2Routes } from './modules/ona/controllers';
 import { coreV2Routes } from './modules/core/controllers';
 
@@ -92,6 +94,8 @@ async function main() {
   server.register(fhirRoutes, { prefix: '/api' });
   server.register(auditRoutes, { prefix: '/api' });
   server.register(adminRoutes, { prefix: '/api' });
+  server.register(okrsRoutes, { prefix: '/api' });
+  server.register(educationRoutes, { prefix: '/api' });
   server.register(onaV2Routes, { prefix: '/api' });
   server.register(coreV2Routes, { prefix: '/api' });
 

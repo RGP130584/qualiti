@@ -287,6 +287,124 @@ export async function initDb() {
     `);
 
     // ==========================================
+    // TABELAS DE GESTÃO ESTRATÉGICA (OKRs)
+    // ==========================================
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS okrs (
+        id SERIAL PRIMARY KEY,
+        titulo VARCHAR(255) NOT NULL,
+        descricao TEXT,
+        visao_estrategica VARCHAR(255) DEFAULT '3 Anos',
+        periodo VARCHAR(100) DEFAULT '2026-2028',
+        prioridade VARCHAR(50) DEFAULT 'Alta',
+        responsavel VARCHAR(255) NOT NULL,
+        setor VARCHAR(100) NOT NULL,
+        status VARCHAR(50) DEFAULT 'Em Andamento',
+        progresso NUMERIC(5,2) DEFAULT 0.00,
+        score NUMERIC(3,2) DEFAULT 0.00,
+        indicadores_vinculados JSONB DEFAULT '[]'::jsonb,
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS key_results (
+        id SERIAL PRIMARY KEY,
+        okr_id INTEGER REFERENCES okrs(id) ON DELETE CASCADE,
+        titulo VARCHAR(255) NOT NULL,
+        meta VARCHAR(255) NOT NULL,
+        valor_atual NUMERIC(10,2) DEFAULT 0.00,
+        valor_alvo NUMERIC(10,2) NOT NULL,
+        unidade VARCHAR(50) DEFAULT '%',
+        progresso NUMERIC(5,2) DEFAULT 0.00,
+        responsavel VARCHAR(255) NOT NULL,
+        setor VARCHAR(100) NOT NULL,
+        prazo DATE NOT NULL,
+        status VARCHAR(50) DEFAULT 'Em Andamento',
+        peso INTEGER DEFAULT 1,
+        data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS okr_cycles (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        tipo VARCHAR(50) DEFAULT 'Trimestral',
+        data_inicio DATE NOT NULL,
+        data_fim DATE NOT NULL,
+        ativo BOOLEAN DEFAULT TRUE
+      );
+
+      CREATE TABLE IF NOT EXISTS okr_progress (
+        id SERIAL PRIMARY KEY,
+        kr_id INTEGER REFERENCES key_results(id) ON DELETE CASCADE,
+        valor NUMERIC(10,2) NOT NULL,
+        nota TEXT,
+        responsavel VARCHAR(255) NOT NULL,
+        data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // ==========================================
+    // TABELAS DE EDUCAÇÃO CORPORATIVA (LMS)
+    // ==========================================
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS education_courses (
+        id SERIAL PRIMARY KEY,
+        titulo VARCHAR(255) NOT NULL,
+        descricao TEXT NOT NULL,
+        setor VARCHAR(100) NOT NULL,
+        trilha VARCHAR(255) DEFAULT 'Geral',
+        obrigatorio BOOLEAN DEFAULT FALSE,
+        sla_horas INTEGER DEFAULT 72,
+        carga_horaria INTEGER DEFAULT 4,
+        capa_url TEXT,
+        ativo BOOLEAN DEFAULT TRUE,
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS education_modules (
+        id SERIAL PRIMARY KEY,
+        curso_id INTEGER REFERENCES education_courses(id) ON DELETE CASCADE,
+        titulo VARCHAR(255) NOT NULL,
+        ordem INTEGER DEFAULT 1,
+        descricao TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS education_lessons (
+        id SERIAL PRIMARY KEY,
+        modulo_id INTEGER REFERENCES education_modules(id) ON DELETE CASCADE,
+        titulo VARCHAR(255) NOT NULL,
+        tipo VARCHAR(50) DEFAULT 'video',
+        conteudo_url TEXT NOT NULL,
+        duracao_minutos INTEGER DEFAULT 15,
+        ordem INTEGER DEFAULT 1
+      );
+
+      CREATE TABLE IF NOT EXISTS education_quizzes (
+        id SERIAL PRIMARY KEY,
+        licao_id INTEGER REFERENCES education_lessons(id) ON DELETE CASCADE,
+        pergunta TEXT NOT NULL,
+        opcoes JSONB NOT NULL,
+        resposta_correta INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS education_progress (
+        id SERIAL PRIMARY KEY,
+        usuario_email VARCHAR(255) NOT NULL,
+        licao_id INTEGER REFERENCES education_lessons(id) ON DELETE CASCADE,
+        concluido BOOLEAN DEFAULT FALSE,
+        data_conclusao TIMESTAMP,
+        UNIQUE(usuario_email, licao_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS education_certificates (
+        id SERIAL PRIMARY KEY,
+        usuario_email VARCHAR(255) NOT NULL,
+        curso_id INTEGER REFERENCES education_courses(id) ON DELETE CASCADE,
+        codigo_certificado VARCHAR(100) UNIQUE NOT NULL,
+        data_emissao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // ==========================================
     // SEED DE DADOS INICIAIS (Caso esteja vazio)
     // ==========================================
 
@@ -295,8 +413,102 @@ export async function initDb() {
       console.log('Realizando seed inicial de Instituição...');
       await client.query(`
         INSERT INTO instituicao (nome, logo, configurado, modulos_ativos)
-        VALUES ('Instituição de Internação QualitaOS', 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=200&q=80', TRUE, '["ona", "pops", "kpis", "incidentes", "bpm", "ia", "auditoria"]'::jsonb);
+        VALUES ('Instituição de Internação QualitaOS', 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=200&q=80', TRUE, '["ona", "pops", "kpis", "incidentes", "bpm", "ia", "auditoria", "okrs", "education"]'::jsonb);
       `);
+    }
+
+    // Seed Inicial de OKRs e KRs Estratégicos
+    const checkOkrs = await client.query('SELECT COUNT(*) FROM okrs');
+    if (parseInt(checkOkrs.rows[0].count) === 0) {
+      console.log('Realizando seed inicial de OKRs Estratégicos...');
+      const resOkr1 = await client.query(`
+        INSERT INTO okrs (titulo, descricao, visao_estrategica, periodo, prioridade, responsavel, setor, progresso, score, indicadores_vinculados)
+        VALUES 
+        ('Ser referência em excelência operacional e governança institucional', 'Alcançar maturidade máxima em gestão hospitalar de internação e acreditação ONA Nível 3.', '3 Anos', '2026-2028', 'Alta', 'Administrador Geral', 'Diretoria Geral', 65.00, 0.65, '["KPI-ADM-01", "KPI-MON-01"]'::jsonb),
+        ('Garantir segurança assistencial e risco zero ao paciente de internação', 'Eliminar eventos adversos graves e atingir conformidade total nos protocolos assistenciais.', '1 Ano', '2026', 'Crítica', 'Enf. Maria Souza', 'Enfermagem', 80.00, 0.80, '["KPI-ENF-01", "KPI-FAR-01"]'::jsonb)
+        RETURNING id;
+      `);
+
+      // Inserir KRs para o OKR 1
+      await client.query(`
+        INSERT INTO key_results (okr_id, titulo, meta, valor_atual, valor_alvo, unidade, progresso, responsavel, setor, prazo, peso)
+        VALUES 
+        ($1, 'Aumentar conformidade documental para 95%', 'Atingir 95% de conformidade de POPs e protocolos na auditoria interna', 85.00, 95.00, '%', 85.00, 'Enf. Maria Souza', 'Enfermagem', '2026-12-31', 2),
+        ($1, 'Reduzir glosas de internação para menos de 3%', 'Otimizar prontuários e faturamento para mitigar perdas financeiras', 3.80, 3.00, '%', 70.00, 'Administrador Geral', 'Financeiro', '2026-09-30', 1);
+      `, [resOkr1.rows[0].id]);
+
+      // Inserir KRs para o OKR 2
+      await client.query(`
+        INSERT INTO key_results (okr_id, titulo, meta, valor_atual, valor_alvo, unidade, progresso, responsavel, setor, prazo, peso)
+        VALUES 
+        ($1, 'Reduzir não conformidades e quase falhas em 30%', 'Implementar barreiras de segurança e dupla checagem medicamentosa', 15.00, 30.00, '%', 50.00, 'Dr. Carlos Mendes', 'Medicina Clínica', '2026-12-31', 2),
+        ($1, 'Atingir 100% de acurácia na dispensação de psicotrópicos', 'Zero divergência no controle de estoque da farmácia de internação', 98.20, 100.00, '%', 90.00, 'Dr. Roberto Rocha', 'Farmácia', '2026-06-30', 2);
+      `, [resOkr1.rows[1].id]);
+
+      // Inserir Ciclo OKR
+      await client.query(`
+        INSERT INTO okr_cycles (nome, tipo, data_inicio, data_fim, ativo)
+        VALUES ('Q2 2026 - Aceleração ONA', 'Trimestral', '2026-04-01', '2026-06-30', TRUE);
+      `);
+    }
+
+    // Seed Inicial de Educação Corporativa (LMS)
+    const checkCourses = await client.query('SELECT COUNT(*) FROM education_courses');
+    if (parseInt(checkCourses.rows[0].count) === 0) {
+      console.log('Realizando seed inicial de Educação Corporativa (LMS)...');
+      
+      // Curso 1: Integração Institucional (Obrigatório SLA 72h)
+      const resCurso1 = await client.query(`
+        INSERT INTO education_courses (titulo, descricao, setor, trilha, obrigatorio, sla_horas, carga_horaria, capa_url)
+        VALUES 
+        ('Integração Institucional e Governança ONA', 'Treinamento obrigatório de acolhimento para novos colaboradores. Aborda cultura, segurança do paciente, LGPD, compliance e rotinas de internação.', 'Geral', 'Integração Institucional', TRUE, 72, 4, 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80'),
+        ('Protocolos Assistenciais e Segurança do Paciente', 'Capacitação específica para equipe de enfermagem sobre prevenção de LPP, identificação correta e notificação de incidentes.', 'Enfermagem', 'Assistência Segura', TRUE, 120, 6, 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=600&q=80'),
+        ('Gestão de Contratos e Fluxos Administrativos', 'Treinamento voltado para analistas e gestores administrativos sobre faturamento de internação, glosas e governança de contratos.', 'Administrativo', 'Gestão Financeira', FALSE, 168, 8, 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=600&q=80')
+        RETURNING id;
+      `);
+
+      const c1 = resCurso1.rows[0].id;
+      const c2 = resCurso1.rows[1].id;
+
+      // Módulos e Lições do Curso de Integração
+      const resMod1 = await client.query(`
+        INSERT INTO education_modules (curso_id, titulo, ordem, descricao)
+        VALUES 
+        ($1, 'Módulo 1: Cultura, Estrutura e Acreditação', 1, 'Visão geral da instituição e pilares de governança.'),
+        ($1, 'Módulo 2: Segurança do Paciente e Compliance', 2, 'Diretrizes de conformidade, LGPD e notificação de eventos.')
+        RETURNING id;
+      `, [c1]);
+
+      const m1 = resMod1.rows[0].id;
+      const m2 = resMod1.rows[1].id;
+
+      // Lições do Módulo 1
+      const resLicao1 = await client.query(`
+        INSERT INTO education_lessons (modulo_id, titulo, tipo, conteudo_url, duracao_minutos, ordem)
+        VALUES 
+        ($1, 'Vídeo Institucional de Boas-Vindas', 'video', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', 15, 1),
+        ($1, 'Manual da Qualidade e Estrutura ONA', 'pdf', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', 30, 2)
+        RETURNING id;
+      `, [m1]);
+
+      // Lições do Módulo 2
+      const resLicao2 = await client.query(`
+        INSERT INTO education_lessons (modulo_id, titulo, tipo, conteudo_url, duracao_minutos, ordem)
+        VALUES 
+        ($1, 'Protocolos Internacionais de Segurança do Paciente', 'video', 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', 25, 1),
+        ($1, 'Quiz de Avaliação de Integração', 'quiz', 'quiz_integration_01', 15, 2)
+        RETURNING id;
+      `, [m2]);
+
+      const quizLicaoId = resLicao2.rows[1].id;
+
+      // Inserir Quizzes
+      await client.query(`
+        INSERT INTO education_quizzes (licao_id, pergunta, opcoes, resposta_correta)
+        VALUES 
+        ($1, 'Qual é o prazo limite (SLA) para notificação e investigação inicial de um Evento Sentinela na instituição?', '["12 Horas", "24 Horas", "48 Horas", "7 Dias"]'::jsonb, 1),
+        ($1, 'Qual destas metas internacionais foca na eliminação de erros de medicação (LASA)?', '["Meta 1: Identificação", "Meta 3: Segurança Medicamentosa", "Meta 5: Higienização", "Meta 6: Prevenção de Quedas"]'::jsonb, 1);
+      `, [quizLicaoId]);
     }
 
     // Seed Inicial de Setores Dinâmicos Exigidos

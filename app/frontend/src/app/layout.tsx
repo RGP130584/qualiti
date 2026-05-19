@@ -6,7 +6,7 @@ import {
   Hospital, Activity, FileText, CheckSquare, Users, 
   TrendingUp, AlertTriangle, Cpu, ShieldCheck, Link2, LogOut,
   Layers, Compass, Award, Shield, FileCheck, Target, Zap, BarChart2,
-  Lock, Globe
+  Lock, Globe, GraduationCap
 } from 'lucide-react';
 import './globals.css';
 
@@ -83,6 +83,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     { name: 'IA Corporativa', path: '/ai', icon: Cpu },
     { name: 'Auditoria Inteligente', path: '/audit', icon: ShieldCheck },
     { name: 'Indicadores & Analytics', path: '/indicators', icon: TrendingUp },
+    { name: 'Estratégia & OKRs', path: '/okrs', icon: Target },
+    { name: 'Educação Corporativa', path: '/education', icon: GraduationCap },
     { name: 'Interoperabilidade FHIR', path: '/fhir', icon: Link2 },
     { name: 'Painel Administrativo', path: '/admin/estrutura', icon: Layers },
   ];
