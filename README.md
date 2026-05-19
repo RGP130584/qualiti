@@ -61,7 +61,7 @@ qualiti/
  │    │    ├── src/app/
  │    │    │    ├── admin/       # Painel de Estrutura Organizacional Dinâmica
  │    │    │    ├── pops/        # Módulo de Gestão de Documentos (PWA + QR Code)
- │    │    │    ├── ona/         # Módulo de Acreditação de Internação ONA
+ │    │    │    ├── ona/         # Módulo ONA Refatorado em Clean Architecture (Ver seção abaixo)
  │    │    │    ├── incidents/   # Central de Ocorrências, Ishikawa e Plano CAPA
  │    │    │    ├── indicators/  # Analytics, Metas ONA e Tendências de KPIs
  │    │    │    ├── bpm/         # Workflow BPMN Engine
@@ -75,6 +75,54 @@ qualiti/
  ├── Caddyfile                   # Reverse Proxy Automático (HTTPS, Caching e Load Balancing)
  └── docker-compose.yml          # Orquestração de Containers (App, Caddy, Postgres 16)
 ```
+
+---
+
+## 🛡️ Arquitetura Modular do Módulo ONA (`/app/frontend/src/app/ona`)
+
+O módulo de Acreditação ONA foi completamente refatorado para eliminar o antigo padrão monolítico, adotando uma estrutura enterprise moderna, IA-first e orientada por governança operacional:
+
+```text
+/app/frontend/src/app/ona
+│
+├── page.tsx                     # Ponto de entrada limpo (Apenas Provider e Dashboard)
+│
+├── components/                  # Componentes visuais isolados e reutilizáveis
+│   ├── OnaDashboard.tsx         # Orquestrador central com navegação em abas (Linear/Notion UX)
+│   ├── OnaChecklist.tsx         # Checklist operacional com optimistic updates
+│   ├── OnaEvidenceUpload.tsx    # Upload de evidências comprobatórias via FormData
+│   ├── OnaAuditPanel.tsx        # Agendamento e controle de ciclos de auditoria
+│   ├── OnaActionPlan.tsx        # Planos de Ação Corretiva e Preventiva (CAPA) com modais
+│   ├── OnaIndicators.tsx        # KPIs operacionais de internação por setor
+│   ├── OnaStatusCards.tsx       # Cartões de resumo de conformidade e pendências
+│   └── OnaFilters.tsx           # Barra de simulação de perfis e trava de visibilidade
+│
+├── hooks/                       # Custom hooks para encapsulamento de lógica de negócio
+│   ├── useOna.ts                # Gerenciamento de contexto global e submódulos ativos
+│   ├── useChecklist.ts          # Cálculos de percentual de conformidade em tempo real
+│   ├── useEvidence.ts           # Uploads de arquivos e contagem de pendências
+│   ├── useAudit.ts              # Status e andamento de auditorias de internação
+│   └── useIndicators.ts         # Sumarização de status de KPIs (Conforme, Alerta, Crítico)
+│
+├── services/
+│   └── ona.service.ts           # Centralizador de chamadas REST (/api/ona/*) com fetch limpo
+│
+├── types/
+│   └── ona.types.ts             # Tipagens estritas (Diagnosis, Evidence, ChecklistItem, etc.)
+│
+├── utils/
+│   ├── error-handler.ts         # Padronização de retorno de erros de API (handleApiError)
+│   └── notifications.ts         # Sistema ToastEmitter customizado (Substitui 100% dos alert())
+│
+└── store/
+    └── ona.store.ts             # Store global e Provider de estado com suporte a optimistic updates
+```
+
+### Principais Destaques da Refatoração ONA
+1. **Desacoplamento Total:** O `page.tsx` não realiza fetch nem possui regras de negócio. Tudo é gerenciado de forma reativa pela store global (`ona.store.ts`).
+2. **Proibição de `alert()`:** Alertas bloqueantes foram completamente substituídos pelo utilitário `toast.success()` e `toast.error()`.
+3. **Tratamento de Erros Padronizado:** Todas as requisições passam pela função `handleApiError()`, garantindo resiliência e mensagens claras para o usuário.
+4. **Tipagem Estrita:** Uso zero de `any`. Todas as entidades do manual ONA possuem interfaces TypeScript dedicadas.
 
 ---
 
@@ -92,7 +140,7 @@ Para compilar as imagens do monorepo e subir os serviços em background com recr
 
 ```bash
 # 1. Faça o clone do repositório
-git clone https://github.com/qualitaos/qualiti.git
+git clone https://github.com/RGP130584/qualiti.git
 cd qualiti
 
 # 2. Compile e inicie os containers
@@ -103,6 +151,7 @@ docker compose up -d --build --force-recreate
 Assim que os containers estiverem Up, o Caddy Gateway irá rotear o tráfego automaticamente:
 - **Aplicação Web (Frontend Next.js):** [http://localhost](http://localhost) ou `http://localhost:3000`
 - **Painel de Estrutura Dinâmica:** [http://localhost/admin/estrutura](http://localhost/admin/estrutura)
+- **Módulo ONA Refatorado:** [http://localhost/ona](http://localhost/ona)
 - **API Backend Direta:** [http://localhost/api](http://localhost/api) ou `http://localhost:3001/api`
 - **Documentação OpenAPI / Swagger:** [http://localhost/api/docs](http://localhost/api/docs)
 
