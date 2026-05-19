@@ -42,10 +42,15 @@ export default function UsersPage() {
     setLoading(true);
     try {
       const res = await fetch('/api/users');
-      const data = await res.json();
-      setUsers(data);
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(Array.isArray(data) ? data : []);
+      } else {
+        setUsers([]);
+      }
     } catch (err) {
       console.error('Erro ao buscar usuários:', err);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -54,10 +59,15 @@ export default function UsersPage() {
   async function fetchFuncoes() {
     try {
       const res = await fetch('/api/funcoes');
-      const data = await res.json();
-      setFuncoes(data);
+      if (res.ok) {
+        const data = await res.json();
+        setFuncoes(Array.isArray(data) ? data : []);
+      } else {
+        setFuncoes([]);
+      }
     } catch (err) {
       console.error('Erro ao buscar funções:', err);
+      setFuncoes([]);
     }
   }
 

@@ -57,6 +57,17 @@ export async function initDb() {
       );
     `);
 
+    // Tabela de Funções Cadastradas (Menu Editável de Cargos)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS funcoes_cadastradas (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(255) UNIQUE NOT NULL,
+        is_rt BOOLEAN DEFAULT FALSE,
+        descricao TEXT,
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Tabela de POPs
     await client.query(`
       CREATE TABLE IF NOT EXISTS pops (
@@ -847,6 +858,20 @@ export async function initDb() {
         ('Admin', '[{"label":"Dashboard Executivo","url":"/","icon":"Hospital"},{"label":"Gestão de Documentos","url":"/pops","icon":"FileText"},{"label":"Indicadores ONA","url":"/indicators","icon":"BarChart2"},{"label":"Incidentes & CAPA","url":"/incidents","icon":"AlertTriangle"},{"label":"Módulo ONA","url":"/ona","icon":"Award"},{"label":"Fluxos BPM","url":"/bpm","icon":"Cpu"},{"label":"Painel Administrativo","url":"/admin/estrutura","icon":"Layers"}]'::jsonb),
         ('Enfermagem', '[{"label":"Dashboard Enfermagem","url":"/","icon":"Hospital"},{"label":"Meus Documentos (Enfermagem)","url":"/pops","icon":"FileText"},{"label":"Indicadores Assistenciais","url":"/indicators","icon":"BarChart2"},{"label":"Notificar Ocorrência","url":"/incidents","icon":"AlertTriangle"}]'::jsonb),
         ('Farmácia', '[{"label":"Dashboard Farmácia","url":"/","icon":"Hospital"},{"label":"Meus Documentos (Farmácia)","url":"/pops","icon":"FileText"},{"label":"Indicadores Farmácia","url":"/indicators","icon":"BarChart2"},{"label":"Ocorrências Farmácia","url":"/incidents","icon":"AlertTriangle"}]'::jsonb);
+      `);
+    }
+
+    const checkFuncoes = await client.query('SELECT COUNT(*) FROM funcoes_cadastradas');
+    if (parseInt(checkFuncoes.rows[0].count) === 0) {
+      console.log('Realizando seed inicial de Funções Cadastradas...');
+      await client.query(`
+        INSERT INTO funcoes_cadastradas (nome, is_rt, descricao)
+        VALUES 
+        ('Coordenador / RT (Responsável Técnico)', TRUE, 'Responsável técnico legal perante conselho profissional (COREN, CRF, CRM).'),
+        ('Enfermeiro Chefe', TRUE, 'Responsável técnico de enfermagem do setor.'),
+        ('Farmacêutico RT', TRUE, 'Responsável técnico da farmácia hospitalar.'),
+        ('Médico Auditor', FALSE, 'Responsável por auditorias de prontuários e glosas.'),
+        ('Analista de Qualidade / ONA', FALSE, 'Responsável por monitorias, conformidade e planos de ação ONA.');
       `);
     }
 
