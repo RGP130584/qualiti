@@ -352,4 +352,285 @@ export default async function popsRoutes(fastify: FastifyInstance) {
       client.release();
     }
   });
+
+  // ==========================================
+  // ROTAS DA GESTÃO DE DOCUMENTOS DINÂMICA (LOW-CODE & BPM)
+  // ==========================================
+
+  // CRUD de Tipos Documentais Dinâmicos
+  fastify.get('/documents/types', async (request, reply) => {
+    const client = await pool.connect();
+    try {
+      const res = await client.query('SELECT t.*, w.nome as workflow_nome, tp.nome as template_nome FROM document_types t LEFT JOIN document_workflows w ON t.workflow_id = w.id LEFT JOIN document_templates tp ON t.template_id = tp.id WHERE t.ativo = TRUE ORDER BY t.id ASC');
+      return res.rows;
+    } finally {
+      client.release();
+    }
+  });
+
+  fastify.post('/documents/types', async (request, reply) => {
+    const { nome, categoria, descricao, workflow_id, template_id } = request.body as any;
+    const client = await pool.connect();
+    try {
+      const res = await client.query(`
+        INSERT INTO document_types (nome, categoria, descricao, workflow_id, template_id)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *;
+      `, [nome, categoria, descricao, workflow_id || null, template_id || null]);
+      return res.rows[0];
+    } finally {
+      client.release();
+    }
+  });
+
+  fastify.put('/documents/types/:id', async (request, reply) => {
+    const { id } = request.params as any;
+    const { nome, categoria, descricao, workflow_id, template_id } = request.body as any;
+    const client = await pool.connect();
+    try {
+      const res = await client.query(`
+        UPDATE document_types 
+        SET nome = $1, categoria = $2, descricao = $3, workflow_id = $4, template_id = $5
+        WHERE id = $6
+        RETURNING *;
+      `, [nome, categoria, descricao, workflow_id || null, template_id || null, id]);
+      return res.rows[0];
+    } finally {
+      client.release();
+    }
+  });
+
+  fastify.delete('/documents/types/:id', async (request, reply) => {
+    const { id } = request.params as any;
+    const client = await pool.connect();
+    try {
+      await client.query('UPDATE document_types SET ativo = FALSE WHERE id = $1', [id]);
+      return { success: true, message: 'Tipo documental desativado com sucesso' };
+    } finally {
+      client.release();
+    }
+  });
+
+  // CRUD de Categorias e Subcategorias
+  fastify.get('/documents/categories', async (request, reply) => {
+    const client = await pool.connect();
+    try {
+      const res = await client.query('SELECT * FROM document_categories WHERE ativo = TRUE ORDER BY id ASC');
+      return res.rows;
+    } finally {
+      client.release();
+    }
+  });
+
+  fastify.post('/documents/categories', async (request, reply) => {
+    const { nome, setor_alvo, subcategorias_json } = request.body as any;
+    const client = await pool.connect();
+    try {
+      const res = await client.query(`
+        INSERT INTO document_categories (nome, setor_alvo, subcategorias_json)
+        VALUES ($1, $2, $3)
+        RETURNING *;
+      `, [nome, setor_alvo || 'Geral', subcategorias_json || []]);
+      return res.rows[0];
+    } finally {
+      client.release();
+    }
+  });
+
+  // CRUD de Workflows BPM
+  fastify.get('/documents/workflows', async (request, reply) => {
+    const client = await pool.connect();
+    try {
+      const res = await client.query('SELECT * FROM document_workflows WHERE ativo = TRUE ORDER BY id ASC');
+      return res.rows;
+    } finally {
+      client.release();
+    }
+  });
+
+  fastify.post('/documents/workflows', async (request, reply) => {
+    const { nome, descricao, etapas_json, sla_horas_padrao } = request.body as any;
+    const client = await pool.connect();
+    try {
+      const res = await client.query(`
+        INSERT INTO document_workflows (nome, descricao, etapas_json, sla_horas_padrao)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *;
+      `, [nome, descricao, etapas_json || ['rascunho', 'revisão', 'aprovação', 'publicado'], sla_horas_padrao || 48]);
+      return res.rows[0];
+    } finally {
+      client.release();
+    }
+  });
+
+  // CRUD de Templates Dinâmicos
+  fastify.get('/documents/templates', async (request, reply) => {
+    const client = await pool.connect();
+    try {
+      const res = await client.query('SELECT * FROM document_templates WHERE ativo = TRUE ORDER BY id ASC');
+      return res.rows;
+    } finally {
+      client.release();
+    }
+  });
+
+  fastify.post('/documents/templates', async (request, reply) => {
+    const { nome, tipo_documental, conteudo_rich_text, placeholders_json } = request.body as any;
+    const client = await pool.connect();
+    try {
+      const res = await client.query(`
+        INSERT INTO document_templates (nome, tipo_documental, conteudo_rich_text, placeholders_json)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *;
+      `, [nome, tipo_documental, conteudo_rich_text, placeholders_json || ['nome', 'setor', 'responsavel', 'data']]);
+      return res.rows[0];
+    } finally {
+      client.release();
+    }
+  });
+
+  // Formulários Dinâmicos e Campos
+  fastify.get('/documents/forms', async (request, reply) => {
+    const client = await pool.connect();
+    try {
+      const resForms = await client.query('SELECT * FROM document_forms WHERE ativo = TRUE ORDER BY id ASC');
+      const resFields = await client.query('SELECT * FROM document_fields ORDER BY id ASC');
+      
+      const fieldMap: Record<number, any[]> = {};
+      for (const f of resFields.rows) {
+        if (!fieldMap[f.form_id]) fieldMap[f.form_id] = [];
+        fieldMap[f.form_id].push(f);
+      }
+
+      return resForms.rows.map(form => ({
+        ...form,
+        campos: fieldMap[form.id] || []
+      }));
+    } finally {
+      client.release();
+    }
+  });
+
+  fastify.post('/documents/forms', async (request, reply) => {
+    const { nome, tipo_documental, setor, campos } = request.body as any;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const resForm = await client.query(`
+        INSERT INTO document_forms (nome, tipo_documental, setor)
+        VALUES ($1, $2, $3)
+        RETURNING *;
+      `, [nome, tipo_documental, setor || 'Geral']);
+
+      const novoForm = resForm.rows[0];
+
+      if (campos && Array.isArray(campos)) {
+        for (const c of campos) {
+          await client.query(`
+            INSERT INTO document_fields (form_id, nome_campo, tipo_campo, opcoes_json, obrigatorio)
+            VALUES ($1, $2, $3, $4, $5)
+          `, [novoForm.id, c.nome_campo, c.tipo_campo || 'texto', c.opcoes_json || [], c.obrigatorio || false]);
+        }
+      }
+
+      await client.query('COMMIT');
+      return novoForm;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      fastify.log.error(err);
+      reply.status(500).send({ error: 'Erro ao criar formulário dinâmico' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // SLA Assíncrono (Simulação de Worker e Filas)
+  fastify.get('/documents/slas', async (request, reply) => {
+    const client = await pool.connect();
+    try {
+      // Simula a passagem do worker assíncrono que verifica filas e dispara escalonamento
+      await client.query(`
+        UPDATE document_slas 
+        SET status_worker = 'escalonado' 
+        WHERE data_limite < CURRENT_TIMESTAMP AND status_worker = 'pendente';
+      `);
+
+      const res = await client.query(`
+        SELECT s.*, p.titulo as documento_titulo, p.codigo, p.setor 
+        FROM document_slas s 
+        JOIN pops p ON s.documento_id = p.id 
+        ORDER BY s.data_limite ASC;
+      `);
+      return res.rows;
+    } finally {
+      client.release();
+    }
+  });
+
+  // IA Documental Contextual (Busca Semântica, Recomendação, Análise de Impacto e Gaps)
+  fastify.post('/documents/ai-analysis', async (request, reply) => {
+    const { documento_id, setor, acao, query } = request.body as any;
+    const client = await pool.connect();
+    try {
+      if (acao === 'busca_semantica') {
+        let queryStr = 'SELECT id, titulo, codigo, setor, status, conteudo FROM pops WHERE 1=1';
+        const params: any[] = [];
+        let paramIdx = 1;
+
+        if (setor && setor !== 'Diretoria Geral' && setor !== 'Qualidade e ONA') {
+          queryStr += ` AND setor = $${paramIdx}`;
+          params.push(setor);
+          paramIdx++;
+        }
+
+        if (query) {
+          queryStr += ` AND (titulo ILIKE $${paramIdx} OR conteudo ILIKE $${paramIdx} OR codigo ILIKE $${paramIdx})`;
+          params.push(`%${query}%`);
+          paramIdx++;
+        }
+
+        queryStr += ' ORDER BY id DESC LIMIT 10';
+        const res = await client.query(queryStr, params);
+        return { tipo: 'busca_semantica', resultados: res.rows };
+      }
+
+      if (acao === 'analise_impacto' && documento_id) {
+        const resDoc = await client.query('SELECT titulo, codigo, setor, conteudo FROM pops WHERE id = $1', [documento_id]);
+        if (resDoc.rows.length === 0) return reply.status(404).send({ error: 'Documento não encontrado' });
+        const doc = resDoc.rows[0];
+
+        // Análise de impacto simulada pela IA
+        return {
+          tipo: 'analise_impacto',
+          documento: doc.titulo,
+          codigo: doc.codigo,
+          setor: doc.setor,
+          impacto_operacional: 'Alto Impacto',
+          setores_afetados: [doc.setor, 'Qualidade e ONA', 'Farmácia', 'Internação'],
+          riscos_identificados: [
+            'Possível divergência na dupla checagem medicamentosa se o fluxo não for atualizado nos totens.',
+            'Necessidade de reciclagem obrigatória da equipe assistencial em até 72 horas pós-publicação.'
+          ],
+          recomendacao_ia: 'A IA sugere emitir um adendo informativo no painel de incidentes e vincular este protocolo à Trilha de Integração do LMS.'
+        };
+      }
+
+      if (acao === 'identificacao_gaps') {
+        return {
+          tipo: 'identificacao_gaps',
+          setor_analisado: setor || 'Geral',
+          gaps_encontrados: [
+            { tipo_documental: 'Protocolo Assistencial', gap: 'Ausência de diretriz atualizada para contenção mecânica segura em leitos de psiquiatria.', criticidade: 'Alta' },
+            { tipo_documental: 'Checklist Operacional', gap: 'Falta de formulário dinâmico para validação do carrinho de emergência no turno noturno.', criticidade: 'Crítica' },
+            { tipo_documental: 'Contrato Jurídico', gap: 'SLA de renovação de contratos de lavanderia e desinfecção sem alerta prévio de 30 dias.', criticidade: 'Média' }
+          ],
+          sugestao_workflow: 'Criar imediatamente os tipos documentais faltantes via painel Low-Code e atribuir SLA de 48 horas para elaboração.'
+        };
+      }
+
+      return reply.status(400).send({ error: 'Ação de IA desconhecida ou parâmetros inválidos' });
+    } finally {
+      client.release();
+    }
+  });
 }

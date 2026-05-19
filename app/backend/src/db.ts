@@ -261,7 +261,105 @@ export async function initDb() {
         ativo BOOLEAN DEFAULT TRUE,
         data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS document_workflows (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        descricao TEXT,
+        etapas_json JSONB DEFAULT '["rascunho", "revisão", "aprovação", "publicado", "revisão periódica"]'::jsonb,
+        sla_horas_padrao INTEGER DEFAULT 48,
+        ativo BOOLEAN DEFAULT TRUE
+      );
+
+      CREATE TABLE IF NOT EXISTS document_templates (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        tipo_documental VARCHAR(100) NOT NULL,
+        conteudo_rich_text TEXT NOT NULL,
+        placeholders_json JSONB DEFAULT '["nome", "setor", "responsavel", "data"]'::jsonb,
+        ativo BOOLEAN DEFAULT TRUE
+      );
+
+      CREATE TABLE IF NOT EXISTS document_categories (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(255) UNIQUE NOT NULL,
+        setor_alvo VARCHAR(100) DEFAULT 'Geral',
+        subcategorias_json JSONB DEFAULT '[]'::jsonb,
+        ativo BOOLEAN DEFAULT TRUE
+      );
+
+      CREATE TABLE IF NOT EXISTS document_types (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(255) UNIQUE NOT NULL,
+        categoria VARCHAR(100) NOT NULL,
+        descricao TEXT,
+        workflow_id INTEGER REFERENCES document_workflows(id) ON DELETE SET NULL,
+        template_id INTEGER REFERENCES document_templates(id) ON DELETE SET NULL,
+        ativo BOOLEAN DEFAULT TRUE
+      );
+
+      CREATE TABLE IF NOT EXISTS document_forms (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        tipo_documental VARCHAR(100) NOT NULL,
+        setor VARCHAR(100) DEFAULT 'Geral',
+        ativo BOOLEAN DEFAULT TRUE
+      );
+
+      CREATE TABLE IF NOT EXISTS document_fields (
+        id SERIAL PRIMARY KEY,
+        form_id INTEGER REFERENCES document_forms(id) ON DELETE CASCADE,
+        nome_campo VARCHAR(255) NOT NULL,
+        tipo_campo VARCHAR(50) DEFAULT 'texto',
+        opcoes_json JSONB DEFAULT '[]'::jsonb,
+        obrigatorio BOOLEAN DEFAULT FALSE
+      );
+
+      CREATE TABLE IF NOT EXISTS document_versions (
+        id SERIAL PRIMARY KEY,
+        documento_id INTEGER REFERENCES pops(id) ON DELETE CASCADE,
+        versao VARCHAR(20) NOT NULL,
+        conteudo TEXT NOT NULL,
+        autor VARCHAR(255) NOT NULL,
+        aprovador VARCHAR(255) DEFAULT 'Pendente',
+        status VARCHAR(50) DEFAULT 'Aprovado',
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS document_permissions (
+        id SERIAL PRIMARY KEY,
+        tipo_documental VARCHAR(100) NOT NULL,
+        setor VARCHAR(100) NOT NULL,
+        pode_criar BOOLEAN DEFAULT TRUE,
+        pode_editar BOOLEAN DEFAULT TRUE,
+        pode_aprovar BOOLEAN DEFAULT FALSE
+      );
+
+      CREATE TABLE IF NOT EXISTS document_status (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(50) UNIQUE NOT NULL,
+        cor VARCHAR(50) DEFAULT '#3b82f6'
+      );
+
+      CREATE TABLE IF NOT EXISTS document_slas (
+        id SERIAL PRIMARY KEY,
+        documento_id INTEGER REFERENCES pops(id) ON DELETE CASCADE,
+        tipo_sla VARCHAR(50) DEFAULT 'revisão',
+        prazo_horas INTEGER DEFAULT 24,
+        data_limite TIMESTAMP NOT NULL,
+        status_worker VARCHAR(50) DEFAULT 'pendente'
+      );
+
+      CREATE TABLE IF NOT EXISTS document_reviews (
+        id SERIAL PRIMARY KEY,
+        documento_id INTEGER REFERENCES pops(id) ON DELETE CASCADE,
+        revisor_email VARCHAR(255) NOT NULL,
+        parecer TEXT NOT NULL,
+        aprovado BOOLEAN DEFAULT TRUE,
+        data_revisao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
+
 
     // Tabela de Configuração de Dashboards Contextuais Dinâmicos
     await client.query(`
@@ -641,6 +739,106 @@ export async function initDb() {
         ('Formulário / Registro', 'Operacional', 'Geral'),
         ('Diretriz Estratégica', 'Governança', 'Gestão');
       `);
+
+      // Seed Inicial de Workflows Documentais
+      const checkWf = await client.query('SELECT COUNT(*) FROM document_workflows');
+      if (parseInt(checkWf.rows[0].count) === 0) {
+        console.log('Realizando seed de Workflows Documentais BPM...');
+        const resWf = await client.query(`
+          INSERT INTO document_workflows (nome, descricao, etapas_json, sla_horas_padrao)
+          VALUES 
+          ('Workflow POP / Procedimento', 'Fluxo padrão ONA para aprovação de POPs.', '["rascunho", "revisão", "aprovação", "publicado", "revisão periódica"]'::jsonb, 48),
+          ('Workflow Contrato Jurídico', 'Fluxo de assinatura e validação de contratos.', '["rascunho", "assinatura", "upload digitalizado", "validação", "ativo"]'::jsonb, 72),
+          ('Workflow Checklist Operacional', 'Fluxo simplificado de verificação diária.', '["rascunho", "validação", "ativo"]'::jsonb, 24)
+          RETURNING id;
+        `);
+
+        // Seed Inicial de Templates
+        const resTpl = await client.query(`
+          INSERT INTO document_templates (nome, tipo_documental, conteudo_rich_text, placeholders_json)
+          VALUES 
+          ('Template Padrão ONA para POPs', 'POP', '# Procedimento Operacional Padrão: {{nome}}\n\n**Setor:** {{setor}}\n**Responsável:** {{responsavel}}\n**Data de Emissão:** {{data}}\n\n## 1. Objetivo\nDescrever as etapas do procedimento operacional para assegurar conformidade.\n\n## 2. Aplicação\nAplica-se a todos os profissionais do setor.\n\n## 3. Descrição das Etapas\n1. Passo inicial...\n2. Checagem de segurança...\n\n## 4. Histórico de Revisão\n- Emissão inicial.', '["nome", "setor", "responsavel", "data"]'::jsonb),
+          ('Template Contrato de Prestação de Serviços', 'Contrato', '# Contrato Institucional: {{nome}}\n\n**Setor Solicitante:** {{setor}}\n**Gestor do Contrato:** {{responsavel}}\n**Data de Vigência:** {{data}}\n\n## Cláusula 1: Do Objeto\nO presente instrumento tem como objeto a prestação de serviços hospitalares...', '["nome", "setor", "responsavel", "data"]'::jsonb)
+          RETURNING id;
+        `);
+
+        const wfPopId = resWf.rows[0].id;
+        const wfContratoId = resWf.rows[1].id;
+        const tplPopId = resTpl.rows[0].id;
+        const tplContratoId = resTpl.rows[1].id;
+
+        // Seed Inicial de Categorias
+        await client.query(`
+          INSERT INTO document_categories (nome, setor_alvo, subcategorias_json)
+          VALUES 
+          ('Qualidade', 'Geral', '["Auditoria", "Acreditação", "Melhoria Contínua"]'::jsonb),
+          ('RH', 'Administrativo', '["Admissão", "Treinamento", "Benefícios"]'::jsonb),
+          ('Financeiro', 'Administrativo', '["Faturamento", "Contas a Pagar", "Glosas"]'::jsonb),
+          ('Assistencial', 'Enfermagem', '["Protocolos Clínicos", "Segurança do Paciente", "Eventos Adversos"]'::jsonb),
+          ('Segurança', 'Geral', '["Segurança do Trabalho", "PGRSS", "Radioproteção"]'::jsonb),
+          ('Jurídico', 'Administrativo', '["Contratos", "LGPD", "Compliance"]'::jsonb)
+        `);
+
+        // Seed Inicial de Tipos Documentais Dinâmicos
+        await client.query(`
+          INSERT INTO document_types (nome, categoria, descricao, workflow_id, template_id)
+          VALUES 
+          ('POP', 'Qualidade', 'Procedimento Operacional Padrão da Instituição.', $1, $3),
+          ('Protocolo', 'Assistencial', 'Diretriz de prática clínica e segurança do paciente.', $1, $3),
+          ('Contrato', 'Jurídico', 'Instrumento de acordo formal de prestação de serviços.', $2, $4),
+          ('Manual', 'Qualidade', 'Guia completo de governança e estrutura hospitalar.', $1, $3),
+          ('Formulário', 'Financeiro', 'Registro estruturado de dados de faturamento.', $3, $3),
+          ('Checklist Operacional', 'Segurança', 'Lista de verificação diária de conformidade.', $3, $3),
+          ('Plano Estratégico', 'Qualidade', 'Planejamento e metas institucionais de longo prazo.', $1, $3),
+          ('Fluxo Assistencial', 'Assistencial', 'Mapeamento visual de processos de atendimento ao paciente.', $1, $3),
+          ('Documento Jurídico', 'Jurídico', 'Pareceres, procurações e defesas institucionais.', $2, $4)
+        `, [wfPopId, wfContratoId, tplPopId, tplContratoId]);
+
+        // Seed Inicial de Formulários Dinâmicos
+        const resForm = await client.query(`
+          INSERT INTO document_forms (nome, tipo_documental, setor)
+          VALUES 
+          ('Formulário de Emissão de POP', 'POP', 'Geral'),
+          ('Formulário de Validação de Contrato', 'Contrato', 'Administrativo')
+          RETURNING id;
+        `);
+
+        const formPopId = resForm.rows[0].id;
+
+        // Seed Inicial de Campos Dinâmicos do Formulário
+        await client.query(`
+          INSERT INTO document_fields (form_id, nome_campo, tipo_campo, opcoes_json, obrigatorio)
+          VALUES 
+          ($1, 'Título do POP', 'texto', '[]'::jsonb, TRUE),
+          ($1, 'Setor de Aplicação', 'select', '["Enfermagem", "Farmácia", "Administrativo", "Medicina Clínica", "Psicologia"]'::jsonb, TRUE),
+          ($1, 'Nível de Criticidade', 'select', '["Baixo", "Médio", "Alto", "Crítico"]'::jsonb, TRUE),
+          ($1, 'Upload do Fluxograma', 'upload', '[]'::jsonb, FALSE),
+          ($1, 'Data de Vigência', 'datas', '[]'::jsonb, TRUE),
+          ($1, 'Assinatura do RT', 'assinaturas', '[]'::jsonb, TRUE)
+        `, [formPopId]);
+
+        // Seed Inicial de Status Documentais
+        await client.query(`
+          INSERT INTO document_status (nome, cor)
+          VALUES 
+          ('Rascunho', '#64748b'),
+          ('Em Revisão', '#f59e0b'),
+          ('Aprovado', '#10b981'),
+          ('Publicado', '#3b82f6'),
+          ('Vencido', '#ef4444')
+        `);
+
+        // Seed Inicial de Permissões
+        await client.query(`
+          INSERT INTO document_permissions (tipo_documental, setor, pode_criar, pode_editar, pode_aprovar)
+          VALUES 
+          ('POP', 'Enfermagem', TRUE, TRUE, FALSE),
+          ('POP', 'Qualidade e ONA', TRUE, TRUE, TRUE),
+          ('Contrato', 'Administrativo', TRUE, TRUE, TRUE),
+          ('Protocolo', 'Medicina Clínica', TRUE, TRUE, TRUE)
+        `);
+      }
+
 
       // Seed Inicial de Menus Dinâmicos
       await client.query(`

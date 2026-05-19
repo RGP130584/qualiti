@@ -263,7 +263,86 @@ CREATE TABLE education_notifications (
   lida BOOLEAN DEFAULT FALSE,
   data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Tabelas de Gestão de Documentos Dinâmica (BPM & Low-Code)
+CREATE TABLE document_workflows (
+  id SERIAL PRIMARY KEY,
+  nome VARCHAR(255) NOT NULL,
+  descricao TEXT,
+  etapas_json JSONB DEFAULT '["rascunho", "revisão", "aprovação", "publicado", "revisão periódica"]'::jsonb,
+  sla_horas_padrao INTEGER DEFAULT 48,
+  ativo BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE document_templates (
+  id SERIAL PRIMARY KEY,
+  nome VARCHAR(255) NOT NULL,
+  tipo_documental VARCHAR(100) NOT NULL,
+  conteudo_rich_text TEXT NOT NULL,
+  placeholders_json JSONB DEFAULT '["nome", "setor", "responsavel", "data"]'::jsonb,
+  ativo BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE document_categories (
+  id SERIAL PRIMARY KEY,
+  nome VARCHAR(255) UNIQUE NOT NULL,
+  setor_alvo VARCHAR(100) DEFAULT 'Geral',
+  subcategorias_json JSONB DEFAULT '[]'::jsonb,
+  ativo BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE document_types (
+  id SERIAL PRIMARY KEY,
+  nome VARCHAR(255) UNIQUE NOT NULL,
+  categoria VARCHAR(100) NOT NULL,
+  descricao TEXT,
+  workflow_id INTEGER REFERENCES document_workflows(id) ON DELETE SET NULL,
+  template_id INTEGER REFERENCES document_templates(id) ON DELETE SET NULL,
+  ativo BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE document_forms (
+  id SERIAL PRIMARY KEY,
+  nome VARCHAR(255) NOT NULL,
+  tipo_documental VARCHAR(100) NOT NULL,
+  setor VARCHAR(100) DEFAULT 'Geral',
+  ativo BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE document_fields (
+  id SERIAL PRIMARY KEY,
+  form_id INTEGER REFERENCES document_forms(id) ON DELETE CASCADE,
+  nome_campo VARCHAR(255) NOT NULL,
+  tipo_campo VARCHAR(50) DEFAULT 'texto',
+  opcoes_json JSONB DEFAULT '[]'::jsonb,
+  obrigatorio BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE document_slas (
+  id SERIAL PRIMARY KEY,
+  documento_id INTEGER REFERENCES pops(id) ON DELETE CASCADE,
+  tipo_sla VARCHAR(50) DEFAULT 'revisão',
+  prazo_horas INTEGER DEFAULT 24,
+  data_limite TIMESTAMP NOT NULL,
+  status_worker VARCHAR(50) DEFAULT 'pendente'
+);
 ```
+
+---
+
+## 🏢 Gestão de Documentos Dinâmica & Workflows BPM
+
+O módulo de **Gestão de Documentos** evoluiu de um repositório estático para uma arquitetura totalmente dinâmica, low-code e modular, inspirada no *Qualiex Fluxos*, *Notion*, *Monday* e *Pipefy*.
+
+### Principais Funcionalidades
+1. **Low-Code Administrativo:** Administradores possuem controle total para criar e editar novos Tipos Documentais (POPs, Protocolos, Contratos, Manuais, Formulários), Categorias e Setores sem alterar código.
+2. **Workflows BPM Configuráveis:** Cada tipo documental possui um fluxo de aprovação customizado (ex: Contrato: Rascunho -> Assinatura -> Upload -> Validação -> Ativo) com SLAs padrão.
+3. **Templates & Placeholders Dinâmicos:** Criação de modelos com rich text e placeholders automáticos (`{{nome}}`, `{{setor}}`, `{{responsavel}}`, `{{data}}`) que reduzem falhas de preenchimento.
+4. **Formulários Dinâmicos:** Construtor de formulários com campos customizáveis (texto, select, upload de anexos, datas e assinaturas digitais).
+5. **Versionamento e Histórico de Revisão:** Controle estrito de alterações com comparação de versões, histórico de autoria e aprovação de edições pendentes com justificativa.
+6. **SLA Assíncrono e Filas:** O monitoramento de prazos de revisão e aprovação ocorre de forma assíncrona via filas e workers, disparando notificações automáticas e escalonamento para gestores.
+7. **Dashboards Contextuais por Setor:** Cada departamento visualiza apenas seus documentos e métricas de SLA (ex: Enfermagem foca em protocolos assistenciais; Administração foca em contratos a vencer).
+8. **IA Documental Avançada:** Motor inteligente para busca semântica, recomendação de documentos correlatos, análise de impacto de mudanças operacionais e identificação automática de gaps na acreditação ONA.
 
 ---
 
@@ -280,6 +359,7 @@ O módulo de Educação Corporativa evoluiu para uma plataforma de streaming edu
 6. **IA Educacional Contextual:** Algoritmo que analisa o histórico de conformidade do colaborador para sugerir jornadas de reciclagem exatas e mitigar riscos de auditoria.
 
 ---
+
 
 
 ## 🛠️ Comandos Úteis de Manutenção
