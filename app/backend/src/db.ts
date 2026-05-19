@@ -402,6 +402,55 @@ export async function initDb() {
         codigo_certificado VARCHAR(100) UNIQUE NOT NULL,
         data_emissao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS education_tracks (
+        id SERIAL PRIMARY KEY,
+        titulo VARCHAR(255) NOT NULL,
+        descricao TEXT NOT NULL,
+        setor VARCHAR(100) NOT NULL,
+        cursos_ids JSONB DEFAULT '[]'::jsonb,
+        carga_horaria_total INTEGER DEFAULT 10,
+        icone VARCHAR(50) DEFAULT 'Compass',
+        ativo BOOLEAN DEFAULT TRUE
+      );
+
+      CREATE TABLE IF NOT EXISTS education_competencies (
+        id SERIAL PRIMARY KEY,
+        cargo VARCHAR(255) NOT NULL,
+        setor VARCHAR(100) NOT NULL,
+        competencias_obrigatorias JSONB DEFAULT '[]'::jsonb,
+        treinamentos_vinculados JSONB DEFAULT '[]'::jsonb,
+        nivel_exigido VARCHAR(50) DEFAULT 'Avançado'
+      );
+
+      CREATE TABLE IF NOT EXISTS education_badges (
+        id SERIAL PRIMARY KEY,
+        titulo VARCHAR(255) NOT NULL,
+        descricao TEXT NOT NULL,
+        icone VARCHAR(50) DEFAULT 'Award',
+        pontos INTEGER DEFAULT 100,
+        criterio VARCHAR(255) NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS education_library (
+        id SERIAL PRIMARY KEY,
+        titulo VARCHAR(255) NOT NULL,
+        categoria VARCHAR(100) NOT NULL,
+        setor VARCHAR(100) NOT NULL,
+        tipo VARCHAR(50) DEFAULT 'PDF',
+        url TEXT NOT NULL,
+        tags JSONB DEFAULT '[]'::jsonb
+      );
+
+      CREATE TABLE IF NOT EXISTS education_notifications (
+        id SERIAL PRIMARY KEY,
+        usuario_email VARCHAR(255) NOT NULL,
+        titulo VARCHAR(255) NOT NULL,
+        mensagem TEXT NOT NULL,
+        tipo VARCHAR(50) DEFAULT 'SLA_ALERTA',
+        lida BOOLEAN DEFAULT FALSE,
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     // ==========================================
@@ -509,9 +558,63 @@ export async function initDb() {
         ($1, 'Qual é o prazo limite (SLA) para notificação e investigação inicial de um Evento Sentinela na instituição?', '["12 Horas", "24 Horas", "48 Horas", "7 Dias"]'::jsonb, 1),
         ($1, 'Qual destas metas internacionais foca na eliminação de erros de medicação (LASA)?', '["Meta 1: Identificação", "Meta 3: Segurança Medicamentosa", "Meta 5: Higienização", "Meta 6: Prevenção de Quedas"]'::jsonb, 1);
       `, [quizLicaoId]);
+
+      // Seed Inicial de Trilhas Inteligentes
+      const checkTracks = await client.query('SELECT COUNT(*) FROM education_tracks');
+      if (parseInt(checkTracks.rows[0].count) === 0) {
+        console.log('Realizando seed de Trilhas Inteligentes...');
+        await client.query(`
+          INSERT INTO education_tracks (titulo, descricao, setor, cursos_ids, carga_horaria_total, icone)
+          VALUES 
+          ('Integração Enfermagem', 'Trilha completa de acolhimento e protocolos assistenciais para novos enfermeiros.', 'Enfermagem', '[1, 2]'::jsonb, 10, 'Compass'),
+          ('Gestão Administrativa & Contratos', 'Formação avançada em fluxos de faturamento, auditoria de glosas e governança.', 'Administrativo', '[1, 3]'::jsonb, 12, 'Layers'),
+          ('Excelência em Farmácia & Controle LASA', 'Trilha focada na rastreabilidade medicamentosa, armazenamento e controle de psicotrópicos.', 'Farmácia', '[1]'::jsonb, 8, 'Shield')
+        `);
+      }
+
+      // Seed Inicial de Matriz de Competências
+      const checkComp = await client.query('SELECT COUNT(*) FROM education_competencies');
+      if (parseInt(checkComp.rows[0].count) === 0) {
+        console.log('Realizando seed de Matriz de Competências...');
+        await client.query(`
+          INSERT INTO education_competencies (cargo, setor, competencias_obrigatorias, treinamentos_vinculados, nivel_exigido)
+          VALUES 
+          ('Enfermeiro', 'Enfermagem', '["Prevenção de LPP", "Dupla Checagem Medicamentosa", "Notificação de Incidentes", "Suporte Avançado de Vida"]'::jsonb, '["Protocolos Assistenciais e Segurança do Paciente", "Integração Institucional e Governança ONA"]'::jsonb, 'Pleno / Avançado'),
+          ('Farmacêutico RT', 'Farmácia', '["Controle de Psicotrópicos", "Gestão de Estoque LASA", "Farmacovigilância", "Rastreabilidade de Insumos"]'::jsonb, '["Integração Institucional e Governança ONA", "Protocolos de Dispensação Segura"]'::jsonb, 'Avançado / Especialista'),
+          ('Analista Administrativo', 'Administrativo', '["Governança de Contratos", "Faturamento de Internação", "Mitigação de Glosas", "LGPD em Saúde"]'::jsonb, '["Gestão de Contratos e Fluxos Administrativos", "Integração Institucional e Governança ONA"]'::jsonb, 'Pleno')
+        `);
+      }
+
+      // Seed Inicial de Badges (Gamificação)
+      const checkBadges = await client.query('SELECT COUNT(*) FROM education_badges');
+      if (parseInt(checkBadges.rows[0].count) === 0) {
+        console.log('Realizando seed de Badges (Gamificação)...');
+        await client.query(`
+          INSERT INTO education_badges (titulo, descricao, icone, pontos, criterio)
+          VALUES 
+          ('Mestre da Qualidade', 'Concluiu a Trilha de Integração Institucional com 100% de aproveitamento nos quizzes.', 'Award', 500, 'CONCLUSAO_INTEGRACAO'),
+          ('Guardião da Segurança', 'Finalizou todos os cursos obrigatórios de Segurança do Paciente dentro do SLA de 72h.', 'ShieldCheck', 300, 'SLA_CUMPRIDO_72H'),
+          ('Especialista em Compliance', 'Atingiu pontuação máxima na avaliação de LGPD e Governança de Contratos.', 'CheckCircle2', 400, 'AVALIACAO_MAXIMA_LGPD')
+        `);
+      }
+
+      // Seed Inicial de Biblioteca Corporativa
+      const checkLib = await client.query('SELECT COUNT(*) FROM education_library');
+      if (parseInt(checkLib.rows[0].count) === 0) {
+        console.log('Realizando seed de Biblioteca Corporativa...');
+        await client.query(`
+          INSERT INTO education_library (titulo, categoria, setor, tipo, url, tags)
+          VALUES 
+          ('Manual de Acreditação ONA v2026', 'Governança', 'Geral', 'PDF', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', '["ONA", "Acreditação", "Manual"]'::jsonb),
+          ('Protocolo de Prevenção de Quedas em Internação', 'Assistência', 'Enfermagem', 'PDF', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', '["Quedas", "Enfermagem", "Segurança"]'::jsonb),
+          ('Diretriz de Dispensação de Psicotrópicos (Portaria 344)', 'Farmácia', 'Farmácia', 'PDF', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', '["Portaria 344", "Psicotrópicos", "Farmácia"]'::jsonb),
+          ('Vídeo Guia de Notificação de Eventos no QualitiOS', 'Tutorial', 'Geral', 'Vídeo', 'https://www.youtube.com/embed/5Peo-ivmupE', '["Tutorial", "QualitiOS", "Incidentes"]'::jsonb)
+        `);
+      }
     }
 
     // Seed Inicial de Setores Dinâmicos Exigidos
+
     const checkSetores = await client.query('SELECT COUNT(*) FROM setores_config');
     if (parseInt(checkSetores.rows[0].count) === 0) {
       console.log('Realizando seed inicial de Setores Dinâmicos...');

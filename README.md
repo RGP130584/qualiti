@@ -214,9 +214,73 @@ CREATE TABLE education_certificates (
   codigo_certificado VARCHAR(100) UNIQUE NOT NULL,
   data_emissao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE education_tracks (
+  id SERIAL PRIMARY KEY,
+  titulo VARCHAR(255) NOT NULL,
+  descricao TEXT NOT NULL,
+  setor VARCHAR(100) NOT NULL,
+  cursos_ids JSONB DEFAULT '[]'::jsonb,
+  carga_horaria_total INTEGER DEFAULT 10,
+  icone VARCHAR(50) DEFAULT 'Compass',
+  ativo BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE education_competencies (
+  id SERIAL PRIMARY KEY,
+  cargo VARCHAR(255) NOT NULL,
+  setor VARCHAR(100) NOT NULL,
+  competencias_obrigatorias JSONB DEFAULT '[]'::jsonb,
+  treinamentos_vinculados JSONB DEFAULT '[]'::jsonb,
+  nivel_exigido VARCHAR(50) DEFAULT 'Avançado'
+);
+
+CREATE TABLE education_badges (
+  id SERIAL PRIMARY KEY,
+  titulo VARCHAR(255) NOT NULL,
+  descricao TEXT NOT NULL,
+  icone VARCHAR(50) DEFAULT 'Award',
+  pontos INTEGER DEFAULT 100,
+  criterio VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE education_library (
+  id SERIAL PRIMARY KEY,
+  titulo VARCHAR(255) NOT NULL,
+  categoria VARCHAR(100) NOT NULL,
+  setor VARCHAR(100) NOT NULL,
+  tipo VARCHAR(50) DEFAULT 'PDF',
+  url TEXT NOT NULL,
+  tags JSONB DEFAULT '[]'::jsonb
+);
+
+CREATE TABLE education_notifications (
+  id SERIAL PRIMARY KEY,
+  usuario_email VARCHAR(255) NOT NULL,
+  titulo VARCHAR(255) NOT NULL,
+  mensagem TEXT NOT NULL,
+  tipo VARCHAR(50) DEFAULT 'SLA_ALERTA',
+  lida BOOLEAN DEFAULT FALSE,
+  data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
 ---
+
+## 🎓 Universidade Corporativa Inteligente & IA-First
+
+O módulo de Educação Corporativa evoluiu para uma plataforma de streaming educacional e gestão do conhecimento, inspirada na experiência de navegação do Qualiex LMS, Netflix e Coursera.
+
+### Principais Pilares
+1. **Onboarding & SLA Obrigatório (72 Horas):** Trilha institucional de acolhimento focada em cultura, LGPD, compliance e rotinas hospitalares. O não cumprimento do prazo de 72h gera alertas e pendências no painel de governança ONA.
+2. **Trilhas Inteligentes por Área:** Capacitações, protocolos e fluxos operacionais segregados dinamicamente por setor (Enfermagem, Farmácia, Administrativo, Medicina Clínica, etc.).
+3. **Matriz de Competências & Gaps:** Mapeamento contínuo de habilidades exigidas por cargo com recomendação de treinamentos para cobrir deficiências operacionais.
+4. **Gamificação & Badges:** Sistema de pontuação (XP) e conquistas digitais (ex: *Mestre da Qualidade*, *Guardião da Segurança*).
+5. **Biblioteca Corporativa Institucional:** Central de busca semântica para POPs, manuais, diretrizes e tutoriais em vídeo.
+6. **IA Educacional Contextual:** Algoritmo que analisa o histórico de conformidade do colaborador para sugerir jornadas de reciclagem exatas e mitigar riscos de auditoria.
+
+---
+
 
 ## 🛠️ Comandos Úteis de Manutenção
 

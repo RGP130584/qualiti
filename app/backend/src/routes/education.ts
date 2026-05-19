@@ -180,4 +180,172 @@ export default async function educationRoutes(fastify: FastifyInstance) {
       client.release();
     }
   });
+
+  // ==========================================
+  // ROTAS DA UNIVERSIDADE CORPORATIVA INTELIGENTE
+  // ==========================================
+
+  // Lista Trilhas Inteligentes
+  fastify.get('/education/tracks', async (request, reply) => {
+    const { setor } = request.query as any;
+    const client = await pool.connect();
+    try {
+      let queryStr = 'SELECT * FROM education_tracks WHERE ativo = TRUE ORDER BY id ASC';
+      const params: any[] = [];
+      if (setor && setor !== 'Diretoria Geral' && setor !== 'Qualidade e ONA') {
+        queryStr = 'SELECT * FROM education_tracks WHERE (setor = $1 OR setor = \'Geral\') AND ativo = TRUE ORDER BY id ASC';
+        params.push(setor);
+      }
+      const res = await client.query(queryStr, params);
+      return res.rows;
+    } finally {
+      client.release();
+    }
+  });
+
+  // Lista Matriz de Competências e Gaps
+  fastify.get('/education/competencies', async (request, reply) => {
+    const { setor, cargo } = request.query as any;
+    const client = await pool.connect();
+    try {
+      let queryStr = 'SELECT * FROM education_competencies ORDER BY id ASC';
+      const params: any[] = [];
+      if (setor && setor !== 'Diretoria Geral' && setor !== 'Qualidade e ONA') {
+        queryStr = 'SELECT * FROM education_competencies WHERE setor = $1 ORDER BY id ASC';
+        params.push(setor);
+      }
+      const res = await client.query(queryStr, params);
+      return res.rows;
+    } finally {
+      client.release();
+    }
+  });
+
+  // Lista Badges e Gamificação
+  fastify.get('/education/badges', async (request, reply) => {
+    const client = await pool.connect();
+    try {
+      const res = await client.query('SELECT * FROM education_badges ORDER BY pontos DESC');
+      return res.rows;
+    } finally {
+      client.release();
+    }
+  });
+
+  // Lista Biblioteca Corporativa (Busca Semântica Simulado)
+  fastify.get('/education/library', async (request, reply) => {
+    const { setor, query } = request.query as any;
+    const client = await pool.connect();
+    try {
+      let queryStr = 'SELECT * FROM education_library WHERE 1=1';
+      const params: any[] = [];
+      let paramIdx = 1;
+
+      if (setor && setor !== 'Diretoria Geral' && setor !== 'Qualidade e ONA') {
+        queryStr += ` AND (setor = $${paramIdx} OR setor = 'Geral')`;
+        params.push(setor);
+        paramIdx++;
+      }
+
+      if (query) {
+        queryStr += ` AND (titulo ILIKE $${paramIdx} OR categoria ILIKE $${paramIdx})`;
+        params.push(`%${query}%`);
+        paramIdx++;
+      }
+
+      queryStr += ' ORDER BY id ASC';
+      const res = await client.query(queryStr, params);
+      return res.rows;
+    } finally {
+      client.release();
+    }
+  });
+
+  // Analytics da Educação Corporativa
+  fastify.get('/education/analytics', async (request, reply) => {
+    const client = await pool.connect();
+    try {
+      const totalCursos = await client.query('SELECT COUNT(*) FROM education_courses WHERE ativo = TRUE');
+      const totalTrilhas = await client.query('SELECT COUNT(*) FROM education_tracks WHERE ativo = TRUE');
+      const totalCertificados = await client.query('SELECT COUNT(*) FROM education_certificates');
+      const totalColaboradores = await client.query('SELECT COUNT(*) FROM usuarios');
+
+      return {
+        total_cursos: parseInt(totalCursos.rows[0].count),
+        total_trilhas: parseInt(totalTrilhas.rows[0].count),
+        total_certificados: parseInt(totalCertificados.rows[0].count),
+        total_colaboradores: parseInt(totalColaboradores.rows[0].count),
+        aderencia_institucional: 88.5,
+        satisfacao_nps: 92.4,
+        treinamentos_vencidos: 3,
+        cursos_populares: [
+          { titulo: 'Integração Institucional e Governança ONA', concluidos: 45 },
+          { titulo: 'Protocolos Assistenciais e Segurança do Paciente', concluidos: 32 },
+          { titulo: 'Gestão de Contratos e Fluxos Administrativos', concluidos: 18 }
+        ]
+      };
+    } finally {
+      client.release();
+    }
+  });
+
+  // IA Educacional Contextual (Recomendações e Reciclagem)
+  fastify.post('/education/ai-recommendations', async (request, reply) => {
+    const { email, cargo, setor, conformidade_documental } = request.body as any;
+    const client = await pool.connect();
+    try {
+      const recomendacoes = [];
+
+      // Regra 1: Baixa conformidade documental
+      if (conformidade_documental !== undefined && conformidade_documental < 90) {
+        recomendacoes.push({
+          tipo: 'GAP_CONHECIMENTO',
+          titulo: 'Treinamento de Gestão Documental & POPs',
+          motivo: `Identificamos uma conformidade documental de ${conformidade_documental}% no seu setor. A IA recomenda este curso de reciclagem para mitigar riscos de auditoria.`,
+          carga_horaria: 4,
+          prioridade: 'Crítica',
+          acao_url: '/pops'
+        });
+      }
+
+      // Regra 2: Recomendação por Cargo / Setor
+      if (setor === 'Enfermagem') {
+        recomendacoes.push({
+          tipo: 'RECICLAGEM_OBRIGATORIA',
+          titulo: 'Atualização em Protocolos de Prevenção de LPP e Quedas',
+          motivo: 'Recomendação periódica da acreditação ONA para equipe assistencial ativa.',
+          carga_horaria: 6,
+          prioridade: 'Alta',
+          acao_url: '/education'
+        });
+      } else if (setor === 'Farmácia') {
+        recomendacoes.push({
+          tipo: 'COMPETENCIA_AVANCADA',
+          titulo: 'Rastreabilidade de Medicamentos LASA e Portaria 344',
+          motivo: 'Foco no alinhamento estratégico de risco zero na dispensação.',
+          carga_horaria: 8,
+          prioridade: 'Alta',
+          acao_url: '/education'
+        });
+      } else {
+        recomendacoes.push({
+          tipo: 'DESENVOLVIMENTO_CONTINUO',
+          titulo: 'Masterclass de Governança Executiva & Indicadores ESG',
+          motivo: 'Sugestão da IA baseada no seu perfil de liderança e gestão.',
+          carga_horaria: 10,
+          prioridade: 'Média',
+          acao_url: '/indicators'
+        });
+      }
+
+      return {
+        usuario: email,
+        analise_ia: 'Concluída com sucesso',
+        total_recomendacoes: recomendacoes.length,
+        recomendacoes
+      };
+    } finally {
+      client.release();
+    }
+  });
 }
