@@ -88,7 +88,20 @@ export default async function popsRoutes(fastify: FastifyInstance) {
   });
 
   // Atualiza um POP existente (Salva a edição como PENDENTE aguardando aprovação institucional)
-  fastify.put('/pops/:id', async (request, reply) => {
+  fastify.put('/pops/:id', {
+    onRequest: [async (request, reply) => {
+      try {
+        await request.jwtVerify();
+      } catch (err) {
+        reply.status(401).send({ error: 'Não autorizado' });
+      }
+    }]
+  }, async (request, reply) => {
+    const authUser = request.user as any;
+    if (authUser.role !== 'Admin' && authUser.role !== 'Gestor da Qualidade') {
+      return reply.status(403).send({ error: 'Proibido. Permissões insuficientes.' });
+    }
+
     const { id } = request.params as any;
     const { titulo, versao, setor, status, conteudo, autor, aprovador } = request.body as any;
     const client = await pool.connect();
@@ -122,7 +135,7 @@ export default async function popsRoutes(fastify: FastifyInstance) {
       await client.query(`
         INSERT INTO auditoria_logs (usuario, acao, entidade, entidade_id, ip)
         VALUES ($1, 'POP_EDIT_REQUESTED', 'POPs', $2, $3)
-      `, [autor || 'Admin', popAtualizado.codigo, request.ip]);
+      `, [authUser.nome || authUser.email, popAtualizado.codigo, request.ip]);
 
       await client.query('COMMIT');
       return popAtualizado;
@@ -243,7 +256,20 @@ export default async function popsRoutes(fastify: FastifyInstance) {
   });
 
   // Remove um POP
-  fastify.delete('/pops/:id', async (request, reply) => {
+  fastify.delete('/pops/:id', {
+    onRequest: [async (request, reply) => {
+      try {
+        await request.jwtVerify();
+      } catch (err) {
+        reply.status(401).send({ error: 'Não autorizado' });
+      }
+    }]
+  }, async (request, reply) => {
+    const user = request.user as any;
+    if (user.role !== 'Admin' && user.role !== 'Gestor da Qualidade') {
+      return reply.status(403).send({ error: 'Proibido. Permissões insuficientes.' });
+    }
+
     const { id } = request.params as any;
     const client = await pool.connect();
     try {
@@ -257,8 +283,8 @@ export default async function popsRoutes(fastify: FastifyInstance) {
       // Log de auditoria
       await client.query(`
         INSERT INTO auditoria_logs (usuario, acao, entidade, entidade_id, ip)
-        VALUES ('Admin', 'POP_DELETE', 'POPs', $1, $2)
-      `, [resPop.rows[0].codigo, request.ip]);
+        VALUES ($1, 'POP_DELETE', 'POPs', $2, $3)
+      `, [user.nome || user.email, resPop.rows[0].codigo, request.ip]);
 
       return { success: true, message: 'POP removido com sucesso' };
     } finally {
@@ -552,7 +578,11 @@ export default async function popsRoutes(fastify: FastifyInstance) {
       await client.query(`
         UPDATE document_slas 
         SET status_worker = 'escalonado' 
-        WHERE data_limite < CURRENT_TIMESTAMP AND status_worker = 'pendente';
+        WHERE id IN (
+          SELECT id FROM document_slas
+          WHERE data_limite < CURRENT_TIMESTAMP AND status_worker = 'pendente'
+          FOR UPDATE SKIP LOCKED
+        );
       `);
 
       const res = await client.query(`

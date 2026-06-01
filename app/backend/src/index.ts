@@ -35,8 +35,13 @@ async function main() {
 
   // Registra CORS
   await server.register(cors, {
-    origin: '*',
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   });
+
+  if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+    console.error("FATAL ERROR: JWT_SECRET is not defined.");
+    process.exit(1);
+  }
 
   // Registra JWT
   await server.register(jwt, {

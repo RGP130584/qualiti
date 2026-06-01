@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import pool from '../db';
+import bcrypt from 'bcryptjs';
 
 export default async function authRoutes(fastify: FastifyInstance) {
   fastify.post('/auth/login', async (request, reply) => {
@@ -12,7 +13,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
       }
 
       const user = res.rows[0];
-      if (password !== user.senha_hash) { // Para fins práticos e MVP, comparação direta ou hash
+      const isValid = await bcrypt.compare(password, user.senha_hash);
+      if (!isValid) {
         return reply.status(401).send({ error: 'Credenciais inválidas' });
       }
 
