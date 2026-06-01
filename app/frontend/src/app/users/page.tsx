@@ -41,7 +41,7 @@ export default function UsersPage() {
   async function fetchUsers() {
     setLoading(true);
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch('/api/v2/core-admin/users');
       if (res.ok) {
         const data = await res.json();
         setUsers(Array.isArray(data) ? data : []);
@@ -58,7 +58,7 @@ export default function UsersPage() {
 
   async function fetchFuncoes() {
     try {
-      const res = await fetch('/api/funcoes');
+      const res = await fetch('/api/v2/core-admin/funcoes');
       if (res.ok) {
         const data = await res.json();
         setFuncoes(Array.isArray(data) ? data : []);
@@ -74,7 +74,7 @@ export default function UsersPage() {
   async function handleSaveUser(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const url = isCreating ? '/api/users' : `/api/users/${selectedUser.id}`;
+      const url = isCreating ? '/api/v2/core-admin/users' : `/api/v2/core-admin/users/${selectedUser.id}`;
       const method = isCreating ? 'POST' : 'PUT';
 
       const res = await fetch(url, {
@@ -103,7 +103,7 @@ export default function UsersPage() {
     }
     if (!confirm('Tem certeza que deseja remover este usuário?')) return;
     try {
-      const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/v2/core-admin/users/${id}`, { method: 'DELETE' });
       if (res.ok) {
         await fetchUsers();
       }
@@ -115,7 +115,7 @@ export default function UsersPage() {
   async function handleSaveFuncao(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const res = await fetch('/api/funcoes', {
+      const res = await fetch('/api/v2/core-admin/funcoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(funcaoData)
@@ -135,7 +135,7 @@ export default function UsersPage() {
   async function handleDeleteFuncao(id: number) {
     if (!confirm('Tem certeza que deseja remover este cargo/função do menu editável?')) return;
     try {
-      const res = await fetch(`/api/funcoes/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/v2/core-admin/funcoes/${id}`, { method: 'DELETE' });
       if (res.ok) {
         await fetchFuncoes();
       }

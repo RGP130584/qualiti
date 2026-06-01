@@ -15,7 +15,6 @@ const auth_1 = __importDefault(require("./routes/auth"));
 const pops_1 = __importDefault(require("./routes/pops"));
 const bpm_1 = __importDefault(require("./routes/bpm"));
 const ona_1 = __importDefault(require("./routes/ona"));
-const users_1 = __importDefault(require("./routes/users"));
 const indicators_1 = __importDefault(require("./routes/indicators"));
 const incidents_1 = __importDefault(require("./routes/incidents"));
 const ai_1 = __importDefault(require("./routes/ai"));
@@ -26,6 +25,7 @@ const okrs_1 = __importDefault(require("./routes/okrs"));
 const education_1 = __importDefault(require("./routes/education"));
 const controllers_1 = require("./modules/ona/controllers");
 const controllers_2 = require("./modules/core/controllers");
+const users_routes_1 = require("./modules/core_admin/routes/users.routes");
 dotenv_1.default.config();
 const server = (0, fastify_1.default)({
     logger: true,
@@ -87,7 +87,6 @@ async function main() {
     server.register(pops_1.default, { prefix: '/api' });
     server.register(bpm_1.default, { prefix: '/api' });
     server.register(ona_1.default, { prefix: '/api' });
-    server.register(users_1.default, { prefix: '/api' });
     server.register(indicators_1.default, { prefix: '/api' });
     server.register(incidents_1.default, { prefix: '/api' });
     server.register(ai_1.default, { prefix: '/api' });
@@ -98,6 +97,8 @@ async function main() {
     server.register(education_1.default, { prefix: '/api' });
     server.register(controllers_1.onaV2Routes, { prefix: '/api' });
     server.register(controllers_2.coreV2Routes, { prefix: '/api' });
+    // Registro da Nova API V2 modularizada (Coexistência)
+    server.register(users_routes_1.usersRoutesV2, { prefix: '/api/v2/core-admin' });
     // Rota de status geral
     server.get('/api/health', async (request, reply) => {
         return { status: 'ok', timestamp: new Date(), service: 'QualitaOS Backend Fastify' };

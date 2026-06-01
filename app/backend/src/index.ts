@@ -11,7 +11,6 @@ import authRoutes from './routes/auth';
 import popsRoutes from './routes/pops';
 import bpmRoutes from './routes/bpm';
 import onaRoutes from './routes/ona';
-import usersRoutes from './routes/users';
 import indicatorsRoutes from './routes/indicators';
 import incidentsRoutes from './routes/incidents';
 import aiRoutes from './routes/ai';
@@ -22,6 +21,7 @@ import okrsRoutes from './routes/okrs';
 import educationRoutes from './routes/education';
 import { onaV2Routes } from './modules/ona/controllers';
 import { coreV2Routes } from './modules/core/controllers';
+import { usersRoutesV2 } from './modules/core_admin/routes/users.routes';
 
 dotenv.config();
 
@@ -92,7 +92,6 @@ async function main() {
   server.register(popsRoutes, { prefix: '/api' });
   server.register(bpmRoutes, { prefix: '/api' });
   server.register(onaRoutes, { prefix: '/api' });
-  server.register(usersRoutes, { prefix: '/api' });
   server.register(indicatorsRoutes, { prefix: '/api' });
   server.register(incidentsRoutes, { prefix: '/api' });
   server.register(aiRoutes, { prefix: '/api' });
@@ -103,6 +102,9 @@ async function main() {
   server.register(educationRoutes, { prefix: '/api' });
   server.register(onaV2Routes, { prefix: '/api' });
   server.register(coreV2Routes, { prefix: '/api' });
+
+  // Registro da Nova API V2 modularizada (Coexistência)
+  server.register(usersRoutesV2, { prefix: '/api/v2/core-admin' });
 
   // Rota de status geral
   server.get('/api/health', async (request, reply) => {
