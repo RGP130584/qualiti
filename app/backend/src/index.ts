@@ -8,7 +8,6 @@ import { initDb } from './db';
 
 import wizardRoutes from './routes/wizard';
 import authRoutes from './routes/auth';
-import popsRoutes from './routes/pops';
 import bpmRoutes from './routes/bpm';
 import onaRoutes from './routes/ona';
 import indicatorsRoutes from './routes/indicators';
@@ -22,6 +21,7 @@ import educationRoutes from './routes/education';
 import { onaV2Routes } from './modules/ona/controllers';
 import { coreV2Routes } from './modules/core/controllers';
 import { usersRoutesV2 } from './modules/core_admin/routes/users.routes';
+import { popsRoutesV2 } from './modules/quality_assurance/routes/pops.routes';
 
 dotenv.config();
 
@@ -89,7 +89,6 @@ async function main() {
   // Registra Rotas com prefixo /api
   server.register(wizardRoutes, { prefix: '/api' });
   server.register(authRoutes, { prefix: '/api' });
-  server.register(popsRoutes, { prefix: '/api' });
   server.register(bpmRoutes, { prefix: '/api' });
   server.register(onaRoutes, { prefix: '/api' });
   server.register(indicatorsRoutes, { prefix: '/api' });
@@ -105,6 +104,7 @@ async function main() {
 
   // Registro da Nova API V2 modularizada (Coexistência)
   server.register(usersRoutesV2, { prefix: '/api/v2/core-admin' });
+  server.register(popsRoutesV2, { prefix: '/api/v2/quality-assurance' });
 
   // Rota de status geral
   server.get('/api/health', async (request, reply) => {

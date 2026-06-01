@@ -78,14 +78,14 @@ export default function PopsPage() {
     setLoading(true);
     try {
       const [resPops, resNotifs, resTypes, resCats, resWfs, resTpls, resForms, resSlas] = await Promise.all([
-        fetch('/api/pops').then(r => r.json()),
-        fetch('/api/notificacoes').then(r => r.json()),
-        fetch('/api/documents/types').then(r => r.json()),
-        fetch('/api/documents/categories').then(r => r.json()),
-        fetch('/api/documents/workflows').then(r => r.json()),
-        fetch('/api/documents/templates').then(r => r.json()),
-        fetch('/api/documents/forms').then(r => r.json()),
-        fetch('/api/documents/slas').then(r => r.json())
+        fetch('/api/v2/quality-assurance/pops').then(r => r.json()),
+        fetch('/api/v2/quality-assurance/notificacoes').then(r => r.json()),
+        fetch('/api/v2/quality-assurance/documents/types').then(r => r.json()),
+        fetch('/api/v2/quality-assurance/documents/categories').then(r => r.json()),
+        fetch('/api/v2/quality-assurance/documents/workflows').then(r => r.json()),
+        fetch('/api/v2/quality-assurance/documents/templates').then(r => r.json()),
+        fetch('/api/v2/quality-assurance/documents/forms').then(r => r.json()),
+        fetch('/api/v2/quality-assurance/documents/slas').then(r => r.json())
       ]);
 
       setPops(Array.isArray(resPops) ? resPops : []);
@@ -107,7 +107,7 @@ export default function PopsPage() {
   async function handleIngestVerse() {
     setIngesting(true);
     try {
-      const res = await fetch('/api/pops/ingest', { method: 'POST' });
+      const res = await fetch('/api/v2/quality-assurance/pops/ingest', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         alert(data.message);
@@ -125,7 +125,7 @@ export default function PopsPage() {
   // Ações de Documentos (CRUD)
   async function handleViewDetails(id: number) {
     try {
-      const res = await fetch(`/api/pops/${id}`);
+      const res = await fetch(`/api/v2/quality-assurance/pops/${id}`);
       const data = await res.json();
       setSelectedPop(data);
       setFormData({
@@ -149,7 +149,7 @@ export default function PopsPage() {
   async function handleSavePop(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const url = isCreating ? '/api/pops' : `/api/pops/${selectedPop.id}`;
+      const url = isCreating ? '/api/v2/quality-assurance/pops' : `/api/v2/quality-assurance/pops/${selectedPop.id}`;
       const method = isCreating ? 'POST' : 'PUT';
 
       const res = await fetch(url, {
@@ -174,7 +174,7 @@ export default function PopsPage() {
 
   async function handleApproveEdit(id: number) {
     try {
-      const res = await fetch(`/api/pops/${id}/approve-edit`, {
+      const res = await fetch(`/api/v2/quality-assurance/pops/${id}/approve-edit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ aprovador_nome: activeUser.nome })
@@ -196,7 +196,7 @@ export default function PopsPage() {
     const motivo = prompt('Informe o motivo da rejeição da edição:');
     if (motivo === null) return;
     try {
-      const res = await fetch(`/api/pops/${id}/reject-edit`, {
+      const res = await fetch(`/api/v2/quality-assurance/pops/${id}/reject-edit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ aprovador_nome: activeUser.nome, motivo })
@@ -217,7 +217,7 @@ export default function PopsPage() {
   async function handleDeletePop(id: number) {
     if (!confirm('Tem certeza que deseja remover este documento institucional?')) return;
     try {
-      const res = await fetch(`/api/pops/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/v2/quality-assurance/pops/${id}`, { method: 'DELETE' });
       if (res.ok) {
         await fetchAllData();
         if (selectedPop?.id === id) setSelectedPop(null);
@@ -249,7 +249,7 @@ export default function PopsPage() {
   async function handleCreateTipo(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const res = await fetch('/api/documents/types', {
+      const res = await fetch('/api/v2/quality-assurance/documents/types', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -271,7 +271,7 @@ export default function PopsPage() {
   async function handleCreateCat(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const res = await fetch('/api/documents/categories', {
+      const res = await fetch('/api/v2/quality-assurance/documents/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -291,7 +291,7 @@ export default function PopsPage() {
   async function handleCreateWf(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const res = await fetch('/api/documents/workflows', {
+      const res = await fetch('/api/v2/quality-assurance/documents/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -312,7 +312,7 @@ export default function PopsPage() {
   async function handleCreateTpl(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const res = await fetch('/api/documents/templates', {
+      const res = await fetch('/api/v2/quality-assurance/documents/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -333,7 +333,7 @@ export default function PopsPage() {
   async function handleCreateForm(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const res = await fetch('/api/documents/forms', {
+      const res = await fetch('/api/v2/quality-assurance/documents/forms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -361,7 +361,7 @@ export default function PopsPage() {
     e.preventDefault();
     setIaLoading(true);
     try {
-      const res = await fetch('/api/documents/ai-analysis', {
+      const res = await fetch('/api/v2/quality-assurance/documents/ai-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
