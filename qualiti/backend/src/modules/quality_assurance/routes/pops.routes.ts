@@ -17,7 +17,7 @@ export async function popsRoutesV2(fastify: FastifyInstance) {
   // POPs Principais
   fastify.get('/pops', controller.getAllPops);
   fastify.get('/pops/:id', controller.getPopById);
-  fastify.post('/pops', controller.createPop); // Sem auth no legado mas ideal seria com
+  fastify.post('/pops', authOpts, controller.createPop);
   fastify.put('/pops/:id', authOpts, controller.updatePop);
   fastify.delete('/pops/:id', authOpts, controller.deletePop);
 

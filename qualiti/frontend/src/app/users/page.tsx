@@ -79,7 +79,7 @@ export default function UsersPage() {
 
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` },
         body: JSON.stringify(formData)
       });
 
@@ -103,7 +103,7 @@ export default function UsersPage() {
     }
     if (!confirm('Tem certeza que deseja remover este usuário?')) return;
     try {
-      const res = await fetch(`/api/v2/core-admin/users/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/v2/core-admin/users/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` } });
       if (res.ok) {
         await fetchUsers();
       }
@@ -117,7 +117,7 @@ export default function UsersPage() {
     try {
       const res = await fetch('/api/v2/core-admin/funcoes', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` },
         body: JSON.stringify(funcaoData)
       });
       if (res.ok) {
@@ -135,7 +135,7 @@ export default function UsersPage() {
   async function handleDeleteFuncao(id: number) {
     if (!confirm('Tem certeza que deseja remover este cargo/função do menu editável?')) return;
     try {
-      const res = await fetch(`/api/v2/core-admin/funcoes/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/v2/core-admin/funcoes/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` } });
       if (res.ok) {
         await fetchFuncoes();
       }

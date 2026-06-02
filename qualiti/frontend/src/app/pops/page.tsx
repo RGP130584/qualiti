@@ -154,7 +154,7 @@ export default function PopsPage() {
 
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` },
         body: JSON.stringify(formData)
       });
 
@@ -176,7 +176,7 @@ export default function PopsPage() {
     try {
       const res = await fetch(`/api/v2/quality-assurance/pops/${id}/approve-edit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` },
         body: JSON.stringify({ aprovador_nome: activeUser.nome })
       });
       const data = await res.json();
@@ -198,7 +198,7 @@ export default function PopsPage() {
     try {
       const res = await fetch(`/api/v2/quality-assurance/pops/${id}/reject-edit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` },
         body: JSON.stringify({ aprovador_nome: activeUser.nome, motivo })
       });
       const data = await res.json();
@@ -217,7 +217,7 @@ export default function PopsPage() {
   async function handleDeletePop(id: number) {
     if (!confirm('Tem certeza que deseja remover este documento institucional?')) return;
     try {
-      const res = await fetch(`/api/v2/quality-assurance/pops/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/v2/quality-assurance/pops/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` } });
       if (res.ok) {
         await fetchAllData();
         if (selectedPop?.id === id) setSelectedPop(null);
@@ -251,7 +251,7 @@ export default function PopsPage() {
     try {
       const res = await fetch('/api/v2/quality-assurance/documents/types', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` },
         body: JSON.stringify({
           nome: newTipo.nome,
           categoria: newTipo.categoria,
@@ -273,7 +273,7 @@ export default function PopsPage() {
     try {
       const res = await fetch('/api/v2/quality-assurance/documents/categories', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` },
         body: JSON.stringify({
           nome: newCat.nome,
           setor_alvo: newCat.setor_alvo,
@@ -293,7 +293,7 @@ export default function PopsPage() {
     try {
       const res = await fetch('/api/v2/quality-assurance/documents/workflows', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` },
         body: JSON.stringify({
           nome: newWf.nome,
           descricao: newWf.descricao,
@@ -314,7 +314,7 @@ export default function PopsPage() {
     try {
       const res = await fetch('/api/v2/quality-assurance/documents/templates', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` },
         body: JSON.stringify({
           nome: newTpl.nome,
           tipo_documental: newTpl.tipo_documental,
@@ -335,7 +335,7 @@ export default function PopsPage() {
     try {
       const res = await fetch('/api/v2/quality-assurance/documents/forms', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` },
         body: JSON.stringify({
           nome: newForm.nome,
           tipo_documental: newForm.tipo_documental,
@@ -363,7 +363,7 @@ export default function PopsPage() {
     try {
       const res = await fetch('/api/v2/quality-assurance/documents/ai-analysis', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('qualita_token')}` },
         body: JSON.stringify({
           acao: iaAcao,
           query: iaQuery,

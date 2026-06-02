@@ -4,7 +4,7 @@ import jwt from '@fastify/jwt';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import dotenv from 'dotenv';
-import { initDb } from './db';
+import { HealthController } from './health.controller';
 
 import wizardRoutes from './routes/wizard';
 import authRoutes from './routes/auth';
@@ -30,9 +30,6 @@ const server = fastify({
 });
 
 async function main() {
-  // Inicializa Banco de Dados e Seed
-  await initDb();
-
   // Registra CORS
   await server.register(cors, {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -107,9 +104,8 @@ async function main() {
   server.register(popsRoutesV2, { prefix: '/api/v2/quality-assurance' });
 
   // Rota de status geral
-  server.get('/api/health', async (request, reply) => {
-    return { status: 'ok', timestamp: new Date(), service: 'QualitaOS Backend Fastify' };
-  });
+  const healthController = new HealthController();
+  server.get('/api/health', healthController.check);
 
   const port = parseInt(process.env.PORT || '3001', 10);
 
