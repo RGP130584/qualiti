@@ -14,22 +14,35 @@ services:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
 
-  app:
+  backend:
     build:
-      context: ./app
+      context: ./qualiti/backend
       dockerfile: Dockerfile
-    container_name: qualitaos-app
+    container_name: qualitaos-backend
     environment:
       - PORT=3001
       - DATABASE_URL=postgres://qualita:qualita_secure_pw@postgres:5432/qualitaos
       - JWT_SECRET=super_secret_qualita_jwt_key_2026_secure
       - AI_API_KEY=mock_key_for_simulation
       - AI_PROVIDER=mock
+      - FRONTEND_URL=http://localhost:3000
     ports:
-      - "3000:3000"
       - "3001:3001"
     depends_on:
       - postgres
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./qualiti/frontend
+      dockerfile: Dockerfile
+    container_name: qualitaos-frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
     restart: unless-stopped
 
   caddy:
@@ -43,7 +56,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - app
+      - backend
+      - frontend
     restart: unless-stopped
 
 volumes:
