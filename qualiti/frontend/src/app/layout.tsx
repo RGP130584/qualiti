@@ -6,7 +6,7 @@ import {
   Hospital, Activity, FileText, CheckSquare, Users, 
   TrendingUp, AlertTriangle, Cpu, ShieldCheck, Link2, LogOut,
   Layers, Compass, Award, Shield, FileCheck, Target, Zap, BarChart2,
-  Lock, Globe, GraduationCap
+  Lock, Globe, GraduationCap, ChevronDown, ChevronRight
 } from 'lucide-react';
 import './globals.css';
 
@@ -16,6 +16,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [customMenuItems, setCustomMenuItems] = useState<any[]>([]);
+
+  // Estado para controlar expansão do menu sanfona
+  const [expandedMenus, setExpandedMenus] = useState<{ [key: string]: boolean }>({
+    'Core': true,
+    'Estrategia': false,
+    'Operacional': false
+  });
+
+  const toggleMenu = (menuKey: string) => {
+    setExpandedMenus(prev => ({ ...prev, [menuKey]: !prev[menuKey] }));
+  };
 
   const isAuthPage = pathname === '/login' || pathname === '/wizard';
 
@@ -73,20 +84,26 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     router.push('/login');
   };
 
-  // Grupos de Navegação: CORE PLATFORM e MODULES (Estilo Notion + Linear + Stripe)
+  // Grupos de Navegação (Agrupados para Accordion)
   const coreNavItems = [
     { name: 'Dashboard Engine', path: '/', icon: Activity },
     { name: 'Governança & Acessos', path: '/users', icon: Users },
+    { name: 'Painel Administrativo', path: '/admin/estrutura', icon: Layers },
+  ];
+
+  const strategyNavItems = [
+    { name: 'Estratégia & OKRs', path: '/okrs', icon: Target },
+    { name: 'Indicadores & Analytics', path: '/indicators', icon: TrendingUp },
+    { name: 'Auditoria Inteligente', path: '/audit', icon: ShieldCheck },
+    { name: 'Educação Corporativa', path: '/education', icon: GraduationCap },
+    { name: 'Interoperabilidade FHIR', path: '/fhir', icon: Link2 },
+  ];
+
+  const operationalNavItems = [
     { name: 'Gestão de Documentos', path: '/pops', icon: FileText },
     { name: 'Workflow Engine', path: '/bpm', icon: CheckSquare },
     { name: 'Ocorrências & IA', path: '/incidents', icon: Zap },
     { name: 'IA Corporativa', path: '/ai', icon: Cpu },
-    { name: 'Auditoria Inteligente', path: '/audit', icon: ShieldCheck },
-    { name: 'Indicadores & Analytics', path: '/indicators', icon: TrendingUp },
-    { name: 'Estratégia & OKRs', path: '/okrs', icon: Target },
-    { name: 'Educação Corporativa', path: '/education', icon: GraduationCap },
-    { name: 'Interoperabilidade FHIR', path: '/fhir', icon: Link2 },
-    { name: 'Painel Administrativo', path: '/admin/estrutura', icon: Layers },
   ];
 
   const modulesNavItems = [
@@ -181,38 +198,117 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </div>
               )}
 
-              {/* CORE PLATFORM */}
-              <div style={{ padding: '1.5rem 1rem 0.5rem 1rem' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '0.8rem', paddingLeft: '0.5rem' }}>Core Platform</div>
-                <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                  {coreNavItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = pathname === item.path;
-                    return (
-                      <a 
-                        key={item.path} 
-                        href={item.path} 
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.6rem 0.8rem', borderRadius: '8px',
-                          color: isActive ? 'white' : '#9ca3af',
-                          background: isActive ? '#1f2937' : 'transparent',
-                          fontWeight: isActive ? 700 : 500,
-                          fontSize: '0.9rem',
-                          transition: 'all 0.2s ease'
-                        }}
-                        className="hover:bg-gray-800 hover:text-white"
-                      >
-                        <Icon size={18} style={{ color: isActive ? 'var(--sage-light)' : '#6b7280' }} />
-                        <span>{item.name}</span>
-                      </a>
-                    );
-                  })}
-                </nav>
+              {/* ACCORDION CORE */}
+              <div style={{ padding: '1rem 1rem 0 1rem' }}>
+                <div
+                  onClick={() => toggleMenu('Core')}
+                  style={{ display: 'flex', justifyContent: 'space-between', cursor: 'pointer', alignItems: 'center', fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '0.4rem', paddingLeft: '0.5rem' }}
+                >
+                  <span>Plataforma Base</span>
+                  {expandedMenus['Core'] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </div>
+                {expandedMenus['Core'] && (
+                  <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    {coreNavItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = pathname === item.path;
+                      return (
+                        <a
+                          key={item.path}
+                          href={item.path}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.6rem 0.8rem', borderRadius: '8px',
+                            color: isActive ? 'white' : '#9ca3af',
+                            background: isActive ? '#1f2937' : 'transparent',
+                            fontWeight: isActive ? 700 : 500,
+                            fontSize: '0.9rem',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <Icon size={18} style={{ color: isActive ? 'var(--sage-light)' : '#6b7280' }} />
+                          <span>{item.name}</span>
+                        </a>
+                      );
+                    })}
+                  </nav>
+                )}
               </div>
 
-              {/* MODULES */}
+              {/* ACCORDION ESTRATEGIA */}
+              <div style={{ padding: '1rem 1rem 0 1rem' }}>
+                <div
+                  onClick={() => toggleMenu('Estrategia')}
+                  style={{ display: 'flex', justifyContent: 'space-between', cursor: 'pointer', alignItems: 'center', fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '0.4rem', paddingLeft: '0.5rem' }}
+                >
+                  <span>Visão Estratégica</span>
+                  {expandedMenus['Estrategia'] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </div>
+                {expandedMenus['Estrategia'] && (
+                  <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    {strategyNavItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = pathname === item.path;
+                      return (
+                        <a
+                          key={item.path}
+                          href={item.path}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.6rem 0.8rem', borderRadius: '8px',
+                            color: isActive ? 'white' : '#9ca3af',
+                            background: isActive ? '#1f2937' : 'transparent',
+                            fontWeight: isActive ? 700 : 500,
+                            fontSize: '0.9rem',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <Icon size={18} style={{ color: isActive ? '#f59e0b' : '#6b7280' }} />
+                          <span>{item.name}</span>
+                        </a>
+                      );
+                    })}
+                  </nav>
+                )}
+              </div>
+
+              {/* ACCORDION OPERACIONAL */}
+              <div style={{ padding: '1rem 1rem 0 1rem' }}>
+                <div
+                  onClick={() => toggleMenu('Operacional')}
+                  style={{ display: 'flex', justifyContent: 'space-between', cursor: 'pointer', alignItems: 'center', fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '0.4rem', paddingLeft: '0.5rem' }}
+                >
+                  <span>Execução & Workflow</span>
+                  {expandedMenus['Operacional'] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </div>
+                {expandedMenus['Operacional'] && (
+                  <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    {operationalNavItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = pathname === item.path;
+                      return (
+                        <a
+                          key={item.path}
+                          href={item.path}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.6rem 0.8rem', borderRadius: '8px',
+                            color: isActive ? 'white' : '#9ca3af',
+                            background: isActive ? '#1f2937' : 'transparent',
+                            fontWeight: isActive ? 700 : 500,
+                            fontSize: '0.9rem',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <Icon size={18} style={{ color: isActive ? '#10b981' : '#6b7280' }} />
+                          <span>{item.name}</span>
+                        </a>
+                      );
+                    })}
+                  </nav>
+                )}
+              </div>
+
+              {/* MODULES ESTÁTICOS / ESPECIAIS */}
               <div style={{ padding: '1.5rem 1rem 1rem 1rem' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '0.8rem', paddingLeft: '0.5rem' }}>Módulos Especializados</div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '0.8rem', paddingLeft: '0.5rem' }}>Especialidades</div>
                 <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                   {modulesNavItems.map((item) => {
                     const Icon = item.icon;
@@ -229,7 +325,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                           fontSize: '0.9rem',
                           transition: 'all 0.2s ease'
                         }}
-                        className="hover:bg-gray-800 hover:text-white"
                       >
                         <Icon size={18} style={{ color: isActive ? '#3b82f6' : '#6b7280' }} />
                         <span>{item.name}</span>

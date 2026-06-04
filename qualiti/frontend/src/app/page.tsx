@@ -42,10 +42,10 @@ export default function DashboardPage() {
       const rsk = await rskRes.json();
 
       setAnalyticsData(an);
-      setOcorrencias(oc);
-      setDocumentos(doc);
-      setAuditorias(aud);
-      setRiscos(rsk);
+      setOcorrencias(Array.isArray(oc) ? oc : []);
+      setDocumentos(Array.isArray(doc) ? doc : []);
+      setAuditorias(Array.isArray(aud) ? aud : []);
+      setRiscos(Array.isArray(rsk) ? rsk : []);
     } catch (err) {
       console.error('Erro ao buscar dados do Dashboard Engine:', err);
     } finally {
