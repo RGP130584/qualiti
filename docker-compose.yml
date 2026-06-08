@@ -24,7 +24,7 @@ services:
       - AI_PROVIDER=${AI_PROVIDER:-mock}
       - OLLAMA_URL=${OLLAMA_URL:-http://shared-ollama:11434}
     ports:
-      - "${QUALITI_FRONTEND_PORT:-3000}:3000"
+      - "${QUALITI_FRONTEND_PORT:-3002}:3000"
       - "${QUALITI_PORT:-3001}:3001"
     networks:
       - shared_net

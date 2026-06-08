@@ -57,7 +57,7 @@ async function main() {
   startSuspensionWorker();
 
   // Registra CORS
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(o => o.trim());
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3002').split(',').map(o => o.trim());
   await server.register(cors, {
     origin: (origin, cb) => {
       if (!origin) {
