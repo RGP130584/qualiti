@@ -5,6 +5,7 @@ import { seedOnaModule } from './modules/ona/seeds';
 import { initCoreTables } from './modules/core/models';
 import { seedCoreModule } from './modules/core/seeds';
 import { TODOS_DOCUMENTOS_69 } from './modules/core/documentosData';
+import { hashPassword } from './utils/crypto';
 
 dotenv.config();
 
@@ -30,6 +31,63 @@ export async function initDb() {
   try {
     console.log('Verificando e inicializando tabelas do banco de dados...');
 
+    // Inicializar tabelas V2 do ONA e Core primeiro
+    await initOnaTables(pool);
+    await initCoreTables(pool);
+
+    // Garantir colunas para migração retrocompatível de tabelas existentes
+    await client.query(`
+      ALTER TABLE core_ocorrencias ADD COLUMN IF NOT EXISTS tipo VARCHAR(100);
+      ALTER TABLE core_ocorrencias ADD COLUMN IF NOT EXISTS severidade VARCHAR(50);
+      ALTER TABLE core_ocorrencias ADD COLUMN IF NOT EXISTS causa_raiz_ishikawa JSONB DEFAULT '{}'::jsonb;
+      ALTER TABLE core_ocorrencias ADD COLUMN IF NOT EXISTS plano_acao_capa JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE core_ocorrencias ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+
+      ALTER TABLE core_auditorias ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE core_riscos ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE core_seguranca ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE core_analytics ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE core_ai_logs ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+
+      ALTER TABLE ona_planos_acao ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE ona_diagnosticos ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE ona_kpis ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE ona_ai_logs ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+
+      -- Adicionar tenant_id em setores_config, cargos_config, tipos_documentais_config, menus_config, dashboards_config
+      ALTER TABLE setores_config ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE setores_config DROP CONSTRAINT IF EXISTS setores_config_nome_key;
+      ALTER TABLE setores_config DROP CONSTRAINT IF EXISTS setores_config_tenant_nome_key;
+      ALTER TABLE setores_config ADD CONSTRAINT setores_config_tenant_nome_key UNIQUE (tenant_id, nome);
+
+      ALTER TABLE cargos_config ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+
+      ALTER TABLE tipos_documentais_config ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE tipos_documentais_config DROP CONSTRAINT IF EXISTS tipos_documentais_config_nome_key;
+      ALTER TABLE tipos_documentais_config DROP CONSTRAINT IF EXISTS tipos_documentais_config_tenant_nome_key;
+      ALTER TABLE tipos_documentais_config ADD CONSTRAINT tipos_documentais_config_tenant_nome_key UNIQUE (tenant_id, nome);
+
+      ALTER TABLE menus_config ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE menus_config DROP CONSTRAINT IF EXISTS menus_config_perfil_ou_setor_key;
+      ALTER TABLE menus_config DROP CONSTRAINT IF EXISTS menus_config_tenant_perfil_key;
+      ALTER TABLE menus_config ADD CONSTRAINT menus_config_tenant_perfil_key UNIQUE (tenant_id, perfil_ou_setor);
+
+      ALTER TABLE dashboards_config ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE auditoria_logs ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+
+      ALTER TABLE okrs ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE key_results ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE okr_cycles ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE okr_progress ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+
+      ALTER TABLE education_courses ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE education_tracks ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE education_competencies ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE education_badges ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE education_library ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE education_notifications ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+    `);
+
     // Tabela de Instituição (Wizard)
     await client.query(`
       CREATE TABLE IF NOT EXISTS instituicao (
@@ -37,8 +95,22 @@ export async function initDb() {
         nome VARCHAR(255) NOT NULL,
         logo TEXT,
         configurado BOOLEAN DEFAULT FALSE,
-        modulos_ativos JSONB DEFAULT '[]'::jsonb
+        modulos_ativos JSONB DEFAULT '[]'::jsonb,
+        razao_social VARCHAR(255),
+        nome_fantasia VARCHAR(255),
+        cnpj VARCHAR(20),
+        segmento VARCHAR(100),
+        responsavel VARCHAR(255)
       );
+    `);
+
+    // Garantir colunas para migração retrocompatível de instituicao
+    await client.query(`
+      ALTER TABLE instituicao ADD COLUMN IF NOT EXISTS razao_social VARCHAR(255);
+      ALTER TABLE instituicao ADD COLUMN IF NOT EXISTS nome_fantasia VARCHAR(255);
+      ALTER TABLE instituicao ADD COLUMN IF NOT EXISTS cnpj VARCHAR(20);
+      ALTER TABLE instituicao ADD COLUMN IF NOT EXISTS segmento VARCHAR(100);
+      ALTER TABLE instituicao ADD COLUMN IF NOT EXISTS responsavel VARCHAR(255);
     `);
 
     // Tabela de Usuários (RBAC / Acesso)
@@ -125,20 +197,6 @@ export async function initDb() {
       );
     `);
 
-    // Tabela de Requisitos ONA
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS ona_requisitos (
-        id SERIAL PRIMARY KEY,
-        codigo VARCHAR(50) UNIQUE NOT NULL,
-        nome VARCHAR(255) NOT NULL,
-        nivel INTEGER NOT NULL,
-        subsecao VARCHAR(100) NOT NULL,
-        conformidade VARCHAR(50) DEFAULT 'Parcial',
-        evidencias JSONB DEFAULT '[]'::jsonb,
-        data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
     // Tabela de Indicadores
     await client.query(`
       CREATE TABLE IF NOT EXISTS indicadores (
@@ -151,7 +209,8 @@ export async function initDb() {
         meta_anual NUMERIC(10,2) DEFAULT 0,
         valor_atual NUMERIC(10,2) DEFAULT 0,
         tendencia VARCHAR(20) DEFAULT 'Estável',
-        periodicidade VARCHAR(50) DEFAULT 'Mensal'
+        periodicidade VARCHAR(50) DEFAULT 'Mensal',
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central'
       );
     `);
 
@@ -159,6 +218,7 @@ export async function initDb() {
     await client.query(`
       ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS meta_trimestral NUMERIC(10,2) DEFAULT 0;
       ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS meta_anual NUMERIC(10,2) DEFAULT 0;
+      ALTER TABLE indicadores ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
     `);
 
     // Tabela de Coletas de Indicadores
@@ -170,23 +230,6 @@ export async function initDb() {
         valor NUMERIC(10,2) NOT NULL,
         responsavel VARCHAR(255) NOT NULL,
         observacao TEXT
-      );
-    `);
-
-    // Tabela de Incidentes e CAPA
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS incidentes (
-        id SERIAL PRIMARY KEY,
-        titulo VARCHAR(255) NOT NULL,
-        descricao TEXT NOT NULL,
-        tipo VARCHAR(100) NOT NULL,
-        severidade VARCHAR(50) NOT NULL,
-        setor VARCHAR(100) NOT NULL,
-        status VARCHAR(50) DEFAULT 'Aberto',
-        causa_raiz_ishikawa JSONB DEFAULT '{}'::jsonb,
-        plano_acao_capa JSONB DEFAULT '[]'::jsonb,
-        data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        relator VARCHAR(255) NOT NULL
       );
     `);
 
@@ -234,6 +277,15 @@ export async function initDb() {
       ALTER TABLE pops ADD COLUMN IF NOT EXISTS nivel_acesso VARCHAR(50) DEFAULT 'Geral';
       ALTER TABLE pops ADD COLUMN IF NOT EXISTS instituicao_nome VARCHAR(255) DEFAULT 'Instituição de Internação QualitaOS';
       ALTER TABLE pops ADD COLUMN IF NOT EXISTS unidade_nome VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE pops ADD COLUMN IF NOT EXISTS ocr_texto TEXT;
+      ALTER TABLE pops ADD COLUMN IF NOT EXISTS embeddings JSONB;
+      ALTER TABLE pops ADD COLUMN IF NOT EXISTS documentos_impactados JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE pops ADD COLUMN IF NOT EXISTS rastreabilidade_normas JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE pops ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL;
+      ALTER TABLE pops ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+
+      ALTER TABLE bpm_fluxos ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
+      ALTER TABLE bpm_execucoes ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(100) DEFAULT 'Unidade Central';
     `);
 
     // Tabela de Configuração de Setores Dinâmicos
@@ -560,7 +612,264 @@ export async function initDb() {
         lida BOOLEAN DEFAULT FALSE,
         data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS event_logs (
+        id SERIAL PRIMARY KEY,
+        event_name VARCHAR(100) NOT NULL,
+        payload JSONB NOT NULL,
+        status VARCHAR(50) DEFAULT 'success',
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS event_dlq (
+        id SERIAL PRIMARY KEY,
+        event_name VARCHAR(100) NOT NULL,
+        payload JSONB NOT NULL,
+        error_message TEXT,
+        attempts INTEGER DEFAULT 1,
+        status VARCHAR(50) DEFAULT 'pending',
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
+
+    // ==========================================
+    // TABELAS DE COMERCIALIZAÇÃO SaaS & BILLING (PAL)
+    // ==========================================
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pal_planos (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(100) UNIQUE NOT NULL,
+        features_ativas JSONB NOT NULL DEFAULT '[]'::jsonb,
+        cota_documentos INTEGER NOT NULL DEFAULT 100,
+        cota_usuarios INTEGER NOT NULL DEFAULT 10,
+        preco_mensal NUMERIC(10,2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS pal_assinaturas (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) UNIQUE NOT NULL,
+        plano_id INTEGER REFERENCES pal_planos(id) ON DELETE SET NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'ACTIVE',
+        data_inicio TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        data_fim TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS pal_faturas (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        valor NUMERIC(10,2) NOT NULL,
+        status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+        data_vencimento TIMESTAMP NOT NULL,
+        data_pagamento TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS pal_uso (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        recurso VARCHAR(100) NOT NULL,
+        quantidade INTEGER NOT NULL DEFAULT 0,
+        data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(tenant_id, recurso)
+      );
+
+      CREATE TABLE IF NOT EXISTS pal_trial_modulos (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        modulo VARCHAR(50) NOT NULL,
+        data_ativacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        data_expiracao TIMESTAMP NOT NULL,
+        UNIQUE(tenant_id, modulo)
+      );
+
+      CREATE TABLE IF NOT EXISTS pal_solicitacoes_modulo (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        modulo VARCHAR(50) NOT NULL,
+        status VARCHAR(50) DEFAULT 'PENDENTE',
+        data_solicitacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS beta_feedbacks (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        usuario_email VARCHAR(255) NOT NULL,
+        tipo VARCHAR(50) NOT NULL,
+        comentario TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS omoc_cargos (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        nome VARCHAR(255) NOT NULL,
+        descricao TEXT,
+        setor VARCHAR(100) NOT NULL,
+        limite_vagas INTEGER NOT NULL DEFAULT 1,
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (tenant_id, nome, setor)
+      );
+
+      CREATE TABLE IF NOT EXISTS omoc_ocupacoes (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+        cargo_id INTEGER REFERENCES omoc_cargos(id) ON DELETE CASCADE,
+        data_inicio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        data_fim TIMESTAMP,
+        UNIQUE (tenant_id, usuario_id, cargo_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS omoc_reportes (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        cargo_subordinado_id INTEGER REFERENCES omoc_cargos(id) ON DELETE CASCADE,
+        cargo_superior_id INTEGER REFERENCES omoc_cargos(id) ON DELETE CASCADE,
+        tipo VARCHAR(50) DEFAULT 'direto',
+        UNIQUE (tenant_id, cargo_subordinado_id, cargo_superior_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS omoc_substitutos (
+        id SERIAL PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        usuario_titular_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+        usuario_substituto_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+        data_inicio TIMESTAMP NOT NULL,
+        data_fim TIMESTAMP NOT NULL,
+        status VARCHAR(50) DEFAULT 'PENDENTE',
+        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+    `);
+
+    // =========================================================================
+    // MIGRAÇÃO DE DADOS DE TABELAS LEGADAS
+    // =========================================================================
+    // 1. Migração de incidentes -> core_ocorrencias
+    const checkTableIncidentes = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'incidentes'
+      );
+    `);
+    if (checkTableIncidentes.rows[0].exists) {
+      console.log('Migrando dados de incidentes para core_ocorrencias...');
+      const resInc = await client.query('SELECT * FROM incidentes');
+      for (const inc of resInc.rows) {
+        let causaRaiz = typeof inc.causa_raiz_ishikawa === 'string' ? JSON.parse(inc.causa_raiz_ishikawa) : (inc.causa_raiz_ishikawa || {});
+        let planoAcao = typeof inc.plano_acao_capa === 'string' ? JSON.parse(inc.plano_acao_capa) : (inc.plano_acao_capa || []);
+        
+        if (typeof causaRaiz === 'string') {
+          try { causaRaiz = JSON.parse(causaRaiz); } catch {}
+        }
+        if (typeof planoAcao === 'string') {
+          try { planoAcao = JSON.parse(planoAcao); } catch {}
+        }
+
+        await client.query(`
+          INSERT INTO core_ocorrencias (
+            titulo, descricao, setor, relator, status, tipo, severidade, 
+            causa_raiz_ishikawa, plano_acao_capa, tenant_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+        `, [
+          inc.titulo, inc.descricao, inc.setor, inc.relator || 'Anônimo / Usuário',
+          inc.status || 'Pendente', inc.tipo, inc.severidade,
+          JSON.stringify(causaRaiz),
+          JSON.stringify(planoAcao),
+          'Unidade Central'
+        ]);
+      }
+      await client.query('DROP TABLE incidentes CASCADE;');
+      console.log('Tabela incidentes migrada e removida.');
+    }
+
+    // 2. Migração de core_documentos -> pops / pop_versoes
+    const checkTableCoreDocs = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'core_documentos'
+      );
+    `);
+    if (checkTableCoreDocs.rows[0].exists) {
+      console.log('Migrando dados de core_documentos para pops e pop_versoes...');
+      const docsRes = await client.query('SELECT * FROM core_documentos');
+      for (const doc of docsRes.rows) {
+        const popCheck = await client.query('SELECT id FROM pops WHERE codigo = $1', [doc.codigo]);
+        let popId: number;
+        if (popCheck.rows.length === 0) {
+          let embeddings = typeof doc.embeddings === 'string' ? JSON.parse(doc.embeddings) : (doc.embeddings || []);
+          let docsImpactados = typeof doc.documentos_impactados === 'string' ? JSON.parse(doc.documentos_impactados) : (doc.documentos_impactados || []);
+          let rastreabilidade = typeof doc.rastreabilidade_normas === 'string' ? JSON.parse(doc.rastreabilidade_normas) : (doc.rastreabilidade_normas || []);
+
+          if (typeof embeddings === 'string') {
+            try { embeddings = JSON.parse(embeddings); } catch {}
+          }
+          if (typeof docsImpactados === 'string') {
+            try { docsImpactados = JSON.parse(docsImpactados); } catch {}
+          }
+          if (typeof rastreabilidade === 'string') {
+            try { rastreabilidade = JSON.parse(rastreabilidade); } catch {}
+          }
+
+          const insertPop = await client.query(`
+            INSERT INTO pops (
+              codigo, titulo, categoria, setor, versao, conteudo, autor, status,
+              ocr_texto, embeddings, documentos_impactados, rastreabilidade_normas, tenant_id, qrcode
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            RETURNING id;
+          `, [
+            doc.codigo, doc.titulo, doc.categoria, doc.setor, doc.versao, doc.conteudo, doc.autor,
+            doc.status_aprovacao, doc.ocr_texto, 
+            JSON.stringify(embeddings), 
+            JSON.stringify(docsImpactados), 
+            JSON.stringify(rastreabilidade),
+            'Unidade Central', `QR_QUALITA_${doc.codigo}`
+          ]);
+          popId = insertPop.rows[0].id;
+        } else {
+          popId = popCheck.rows[0].id;
+        }
+        await client.query(`
+          INSERT INTO pop_versoes (pop_id, versao, conteudo, autor)
+          VALUES ($1, $2, $3, $4);
+        `, [popId, doc.versao, doc.conteudo, doc.autor]);
+      }
+      await client.query('DROP TABLE core_documentos CASCADE;');
+      console.log('Tabela core_documentos migrada e removida.');
+    }
+
+    // 3. Migração de ona_requisitos -> ona_diagnosticos
+    const checkTableOnaReqs = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'ona_requisitos'
+      );
+    `);
+    if (checkTableOnaReqs.rows[0].exists) {
+      console.log('Migrando dados de ona_requisitos para ona_diagnosticos...');
+      const resOna = await client.query('SELECT * FROM ona_requisitos');
+      for (const req of resOna.rows) {
+        let evidencias = typeof req.evidencias === 'string' ? JSON.parse(req.evidencias) : (req.evidencias || []);
+        if (typeof evidencias === 'string') {
+          try { evidencias = JSON.parse(evidencias); } catch {}
+        }
+        await client.query(`
+          INSERT INTO ona_diagnosticos (
+            requisito, categoria, nivel_ona, setor, status, evidencias, responsavel, score_conformidade, tenant_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+        `, [
+          req.requisito || req.codigo || 'Requisito ONA', req.categoria || 'Geral', req.nivel_ona || 1, req.setor || 'Geral',
+          req.status || req.conformidade || 'Parcial', 
+          JSON.stringify(evidencias),
+          req.responsavel || 'Auditor ONA', req.score_conformidade || 50.00, 'Unidade Central'
+        ]);
+      }
+      await client.query('DROP TABLE ona_requisitos CASCADE;');
+      console.log('Tabela ona_requisitos migrada e removida.');
+    }
 
     // ==========================================
     // SEED DE DADOS INICIAIS (Caso esteja vazio)
@@ -878,15 +1187,16 @@ export async function initDb() {
     const checkUsers = await client.query('SELECT COUNT(*) FROM usuarios');
     if (parseInt(checkUsers.rows[0].count) === 0) {
       console.log('Realizando seed inicial de Usuários (RBAC / Acesso)...');
+      const hashedPassword = hashPassword('admin123');
       await client.query(`
         INSERT INTO usuarios (nome, email, senha_hash, rbac_role, departamento, unidade)
         VALUES 
-        ('Administrador Geral', 'admin@qualitaos.com', 'hashed_secure_password_123', 'Admin', 'Diretoria', 'Unidade Central'),
-        ('Enf. Maria Souza', 'maria.souza@qualitaos.com', 'hashed_secure_password_123', 'Enfermeiro', 'Enfermagem', 'Unidade Central'),
-        ('Dr. Carlos Mendes', 'carlos.mendes@qualitaos.com', 'hashed_secure_password_123', 'Médico', 'Psiquiatria', 'Unidade Central'),
-        ('Dr. Roberto Rocha', 'roberto.rt@qualitaos.com', 'hashed_secure_password_123', 'Farmacêutico RT', 'Farmácia', 'Unidade Central'),
-        ('Auditora Ana Lima', 'ana.lima@qualitaos.com', 'hashed_secure_password_123', 'Auditor ONA', 'Qualidade e ONA', 'Unidade Central');
-      `);
+        ('Administrador Geral', 'admin@qualitaos.com', $1, 'Admin', 'Diretoria', 'Unidade Central'),
+        ('Enf. Maria Souza', 'maria.souza@qualitaos.com', $1, 'Enfermeiro', 'Enfermagem', 'Unidade Central'),
+        ('Dr. Carlos Mendes', 'carlos.mendes@qualitaos.com', $1, 'Médico', 'Psiquiatria', 'Unidade Central'),
+        ('Dr. Roberto Rocha', 'roberto.rt@qualitaos.com', $1, 'Farmacêutico RT', 'Farmácia', 'Unidade Central'),
+        ('Auditora Ana Lima', 'ana.lima@qualitaos.com', $1, 'Auditor ONA', 'Qualidade e ONA', 'Unidade Central');
+      `, [hashedPassword]);
     }
 
     const checkPops = await client.query('SELECT COUNT(*) FROM pops');
@@ -965,33 +1275,32 @@ export async function initDb() {
       `, [resBpm.rows[0].id, resBpm.rows[1].id]);
     }
 
-    const checkOna = await client.query('SELECT COUNT(*) FROM ona_requisitos');
-    if (parseInt(checkOna.rows[0].count) < 18) {
-      console.log('Realizando seed inicial/atualização de Requisitos ONA...');
-      await client.query('TRUNCATE TABLE ona_requisitos RESTART IDENTITY CASCADE');
+    const checkOna = await client.query('SELECT COUNT(*) FROM ona_diagnosticos');
+    if (parseInt(checkOna.rows[0].count) === 0) {
+      console.log('Realizando seed inicial/atualização de Requisitos ONA na tabela ona_diagnosticos...');
       await client.query(`
-        INSERT INTO ona_requisitos (codigo, nome, nivel, subsecao, conformidade, evidencias)
+        INSERT INTO ona_diagnosticos (requisito, categoria, nivel_ona, setor, status, evidencias, responsavel, score_conformidade, tenant_id)
         VALUES 
-        ('ONA-1.1', 'Estrutura Organizacional: Organograma definido, responsabilidades formalizadas e regimentos internos.', 1, 'Governança', 'Conforme', '["Organograma 2026.pdf", "Regimento Interno v3.pdf"]'::jsonb),
-        ('ONA-1.2', 'Regularização Legal: Licenças sanitárias, alvarás, RT e conformidade ANVISA/Trabalhista/Fiscal.', 1, 'Jurídico e Legal', 'Conforme', '["Alvará Sanitário 2026.pdf", "Certidão Negativa Fiscal.pdf"]'::jsonb),
-        ('ONA-1.3', 'Segurança do Paciente: Protocolos de identificação, cirurgia segura, LPP e segurança medicamentosa.', 1, 'Assistência', 'Conforme', '["Protocolo Cirurgia Segura.pdf", "POP Identificação do Paciente.pdf"]'::jsonb),
-        ('ONA-1.4', 'Gestão de Riscos: Mapeamento de riscos, notificação de eventos adversos e plano de ação corretiva.', 1, 'Qualidade', 'Parcial', '["Matriz de Risco Geral.xlsx"]'::jsonb),
-        ('ONA-1.5', 'Padronização Operacional: POPs, protocolos clínicos, fluxos assistenciais e rotinas.', 1, 'Operações', 'Conforme', '["Manual de POPs Enfermagem.pdf"]'::jsonb),
-        ('ONA-1.6', 'Capacitação: Treinamento obrigatório, integração de colaboradores e educação continuada.', 1, 'Recursos Humanos', 'Conforme', '["Plano de Educação Continuada 2026.pdf"]'::jsonb),
+        ('ONA-1.1: Estrutura Organizacional', 'Governança', 1, 'Geral', 'Conforme', '["Organograma 2026.pdf", "Regimento Interno v3.pdf"]'::jsonb, 'Auditor ONA', 100.00, 'Unidade Central'),
+        ('ONA-1.2: Regularização Legal', 'Jurídico e Legal', 1, 'Geral', 'Conforme', '["Alvará Sanitário 2026.pdf", "Certidão Negativa Fiscal.pdf"]'::jsonb, 'Auditor ONA', 100.00, 'Unidade Central'),
+        ('ONA-1.3: Segurança do Paciente', 'Assistência', 1, 'Geral', 'Conforme', '["Protocolo Cirurgia Segura.pdf", "POP Identificação do Paciente.pdf"]'::jsonb, 'Auditor ONA', 100.00, 'Unidade Central'),
+        ('ONA-1.4: Gestão de Riscos', 'Qualidade', 1, 'Geral', 'Parcial', '["Matriz de Risco Geral.xlsx"]'::jsonb, 'Auditor ONA', 50.00, 'Unidade Central'),
+        ('ONA-1.5: Padronização Operacional', 'Operações', 1, 'Geral', 'Conforme', '["Manual de POPs Enfermagem.pdf"]'::jsonb, 'Auditor ONA', 100.00, 'Unidade Central'),
+        ('ONA-1.6: Capacitação', 'Recursos Humanos', 1, 'Geral', 'Conforme', '["Plano de Educação Continuada 2026.pdf"]'::jsonb, 'Auditor ONA', 100.00, 'Unidade Central'),
 
-        ('ONA-2.1', 'Gestão Integrada: Integração entre Assistência, Farmácia, Laboratório, Suprimentos, Engenharia, Financeiro e RH.', 2, 'Governança', 'Conforme', '["Matriz de Interface de Processos.pdf"]'::jsonb),
-        ('ONA-2.2', 'Gestão por Indicadores: Monitoramento de taxa de infecção, espera, ocupação, glosas, eventos e satisfação.', 2, 'Qualidade', 'Conforme', '["Dashboard Gerencial de Indicadores.pdf"]'::jsonb),
-        ('ONA-2.3', 'Gestão Estratégica: Planejamento estratégico, metas institucionais, KPIs e reuniões gerenciais.', 2, 'Diretoria', 'Conforme', '["Planejamento Estratégico 2026-2030.pdf"]'::jsonb),
-        ('ONA-2.4', 'Melhoria Contínua: Aplicação de PDCA, 5W2H, Ishikawa, Lean Healthcare e Six Sigma.', 2, 'Qualidade', 'Parcial', '["Projetos Lean Healthcare 2026.pdf"]'::jsonb),
-        ('ONA-2.5', 'Integração da Qualidade: Auditorias internas, gestão de não conformidades e planos de ação.', 2, 'Auditoria', 'Conforme', '["Cronograma de Auditoria Interna.pdf"]'::jsonb),
-        ('ONA-2.6', 'Gestão de Pessoas: Avaliação de desempenho, plano de treinamento e competências mapeadas.', 2, 'Recursos Humanos', 'Parcial', '["Mapeamento de Competências.xlsx"]'::jsonb),
+        ('ONA-2.1: Gestão Integrada', 'Governança', 2, 'Geral', 'Conforme', '["Matriz de Interface de Processos.pdf"]'::jsonb, 'Auditor ONA', 100.00, 'Unidade Central'),
+        ('ONA-2.2: Gestão por Indicadores', 'Qualidade', 2, 'Geral', 'Conforme', '["Dashboard Gerencial de Indicadores.pdf"]'::jsonb, 'Auditor ONA', 100.00, 'Unidade Central'),
+        ('ONA-2.3: Gestão Estratégica', 'Diretoria', 2, 'Geral', 'Conforme', '["Planejamento Estratégico 2026-2030.pdf"]'::jsonb, 'Auditor ONA', 100.00, 'Unidade Central'),
+        ('ONA-2.4: Melhoria Contínua', 'Qualidade', 2, 'Geral', 'Parcial', '["Projetos Lean Healthcare 2026.pdf"]'::jsonb, 'Auditor ONA', 50.00, 'Unidade Central'),
+        ('ONA-2.5: Integração da Qualidade', 'Auditoria', 2, 'Geral', 'Conforme', '["Cronograma de Auditoria Interna.pdf"]'::jsonb, 'Auditor ONA', 100.00, 'Unidade Central'),
+        ('ONA-2.6: Gestão de Pessoas', 'Recursos Humanos', 2, 'Geral', 'Parcial', '["Mapeamento de Competências.xlsx"]'::jsonb, 'Auditor ONA', 50.00, 'Unidade Central'),
 
-        ('ONA-3.1', 'Cultura Organizacional Madura: Qualidade incorporada à cultura, liderança ativa e segurança psicológica.', 3, 'Cultura', 'Parcial', '["Pesquisa de Clima e Segurança Psicológica.pdf"]'::jsonb),
-        ('ONA-3.2', 'Inteligência de Dados: Uso avançado de BI, Analytics, Big Data, Benchmarking e Indicadores preditivos.', 3, 'Tecnologia', 'Parcial', '["Relatório de BI Preditivo.pdf"]'::jsonb),
-        ('ONA-3.3', 'Inovação e Transformação Digital: Automação, prontuário eletrônico maduro, IA, interoperabilidade e telemedicina.', 3, 'Inovação', 'Parcial', '["Projeto Hospital Digital 2026.pdf"]'::jsonb),
-        ('ONA-3.4', 'Gestão de Desempenho: Comparativos nacionais, benchmark setorial, performance assistencial e ROI.', 3, 'Diretoria', 'Não Conforme', '[]'::jsonb),
-        ('ONA-3.5', 'Experiência do Paciente: Jornada do paciente, humanização, NPS, ouvidoria estratégica e UX em saúde.', 3, 'Ouvidoria', 'Parcial', '["Relatório NPS Anual.pdf"]'::jsonb),
-        ('ONA-3.6', 'Sustentabilidade Institucional: ESG, sustentabilidade financeira, eficiência operacional e governança clínica.', 3, 'ESG', 'Parcial', '["Relatório de Sustentabilidade ESG.pdf"]'::jsonb);
+        ('ONA-3.1: Cultura Organizacional Madura', 'Cultura', 3, 'Geral', 'Parcial', '["Pesquisa de Clima e Segurança Psicológica.pdf"]'::jsonb, 'Auditor ONA', 50.00, 'Unidade Central'),
+        ('ONA-3.2: Inteligência de Dados', 'Tecnologia', 3, 'Geral', 'Parcial', '["Relatório de BI Preditivo.pdf"]'::jsonb, 'Auditor ONA', 50.00, 'Unidade Central'),
+        ('ONA-3.3: Inovação e Transformação Digital', 'Inovação', 3, 'Geral', 'Parcial', '["Projeto Hospital Digital 2026.pdf"]'::jsonb, 'Auditor ONA', 50.00, 'Unidade Central'),
+        ('ONA-3.4: Gestão de Desempenho', 'Diretoria', 3, 'Geral', 'Não Conforme', '[]'::jsonb, 'Auditor ONA', 0.00, 'Unidade Central'),
+        ('ONA-3.5: Experiência do Paciente', 'Ouvidoria', 3, 'Geral', 'Parcial', '["Relatório NPS Anual.pdf"]'::jsonb, 'Auditor ONA', 50.00, 'Unidade Central'),
+        ('ONA-3.6: Sustentabilidade Institucional', 'ESG', 3, 'Geral', 'Parcial', '["Relatório de Sustentabilidade ESG.pdf"]'::jsonb, 'Auditor ONA', 50.00, 'Unidade Central');
       `);
     }
 
@@ -999,18 +1308,18 @@ export async function initDb() {
     if (parseInt(checkInd.rows[0].count) === 0) {
       console.log('Realizando seed inicial de Indicadores por Área (KPIs)...');
       const resInd = await client.query(`
-        INSERT INTO indicadores (codigo, nome, setor, meta, meta_trimestral, meta_anual, valor_atual, tendencia, periodicidade)
+        INSERT INTO indicadores (codigo, nome, setor, meta, meta_trimestral, meta_anual, valor_atual, tendencia, periodicidade, tenant_id)
         VALUES 
-        ('KPI-ADM-01', 'Eficiência Operacional Administrativa', 'Administrativo', 90.00, 92.00, 95.00, 91.50, 'Melhorando', 'Mensal'),
-        ('KPI-RH-01', 'Índice de Rotatividade (Turnover Geral)', 'RH', 5.00, 4.50, 4.00, 4.80, 'Melhorando', 'Mensal'),
-        ('KPI-ENF-01', 'Incidência de Lesão por Pressão (LPP)', 'Enfermagem', 1.50, 1.20, 1.00, 1.35, 'Melhorando', 'Mensal'),
-        ('KPI-MON-01', 'Conformidade em Auditoria de Prontuários', 'Monitoria', 95.00, 96.00, 98.00, 95.50, 'Estável', 'Mensal'),
-        ('KPI-PSI-01', 'Tempo Médio de Acolhimento Psicológico', 'Psicologia', 45.00, 42.00, 40.00, 43.00, 'Melhorando', 'Mensal'),
-        ('KPI-PSIQ-01', 'Taxa de Contenção Mecânica Segura', 'Psiquiatria', 2.00, 1.50, 1.00, 1.80, 'Melhorando', 'Mensal'),
-        ('KPI-COZ-01', 'Índice de Desperdício Resto-Ingesta', 'Cozinha', 5.00, 4.00, 3.00, 4.20, 'Melhorando', 'Mensal'),
-        ('KPI-COM-01', 'Prazo Médio de Entrega de Insumos (Dias)', 'Compras', 5.00, 4.00, 3.00, 4.50, 'Melhorando', 'Mensal'),
-        ('KPI-FIN-01', 'Índice de Glosas de Internação', 'Financeiro', 4.00, 3.50, 3.00, 3.80, 'Melhorando', 'Mensal'),
-        ('KPI-FAR-01', 'Acurácia no Dispensário de Medicamentos', 'Farmácia', 98.00, 99.00, 99.50, 98.20, 'Melhorando', 'Mensal')
+        ('KPI-ADM-01', 'Eficiência Operacional Administrativa', 'Administrativo', 90.00, 92.00, 95.00, 91.50, 'Melhorando', 'Mensal', 'Unidade Central'),
+        ('KPI-RH-01', 'Índice de Rotatividade (Turnover Geral)', 'RH', 5.00, 4.50, 4.00, 4.80, 'Melhorando', 'Mensal', 'Unidade Central'),
+        ('KPI-ENF-01', 'Incidência de Lesão por Pressão (LPP)', 'Enfermagem', 1.50, 1.20, 1.00, 1.35, 'Melhorando', 'Mensal', 'Unidade Central'),
+        ('KPI-MON-01', 'Conformidade em Auditoria de Prontuários', 'Monitoria', 95.00, 96.00, 98.00, 95.50, 'Estável', 'Mensal', 'Unidade Central'),
+        ('KPI-PSI-01', 'Tempo Médio de Acolhimento Psicológico', 'Psicologia', 45.00, 42.00, 40.00, 43.00, 'Melhorando', 'Mensal', 'Unidade Central'),
+        ('KPI-PSIQ-01', 'Taxa de Contenção Mecânica Segura', 'Psiquiatria', 2.00, 1.50, 1.00, 1.80, 'Melhorando', 'Mensal', 'Unidade Central'),
+        ('KPI-COZ-01', 'Índice de Desperdício Resto-Ingesta', 'Cozinha', 5.00, 4.00, 3.00, 4.20, 'Melhorando', 'Mensal', 'Unidade Central'),
+        ('KPI-COM-01', 'Prazo Médio de Entrega de Insumos (Dias)', 'Compras', 5.00, 4.00, 3.00, 4.50, 'Melhorando', 'Mensal', 'Unidade Central'),
+        ('KPI-FIN-01', 'Índice de Glosas de Internação', 'Financeiro', 4.00, 3.50, 3.00, 3.80, 'Melhorando', 'Mensal', 'Unidade Central'),
+        ('KPI-FAR-01', 'Acurácia no Dispensário de Medicamentos', 'Farmácia', 98.00, 99.00, 99.50, 98.20, 'Melhorando', 'Mensal', 'Unidade Central')
         RETURNING id;
       `);
 
@@ -1024,14 +1333,14 @@ export async function initDb() {
       `, [resInd.rows[0].id, resInd.rows[1].id]);
     }
 
-    const checkInc = await client.query('SELECT COUNT(*) FROM incidentes');
+    const checkInc = await client.query('SELECT COUNT(*) FROM core_ocorrencias');
     if (parseInt(checkInc.rows[0].count) === 0) {
-      console.log('Realizando seed inicial de Incidentes...');
+      console.log('Realizando seed inicial de Incidentes em core_ocorrencias...');
       await client.query(`
-        INSERT INTO incidentes (titulo, descricao, tipo, severidade, setor, status, causa_raiz_ishikawa, plano_acao_capa, relator)
+        INSERT INTO core_ocorrencias (titulo, descricao, setor, relator, status, tipo, severidade, causa_raiz_ishikawa, plano_acao_capa, tenant_id)
         VALUES 
-        ('Troca de Medicação na UTI', 'Paciente recebeu 10mg de medicação X em vez de Y devido a semelhança na embalagem.', 'Evento Adverso', 'Grave', 'UTI', 'Em Investigação', '{"metodo":"Falta de dupla checagem","material":"Embalagens muito similares (LASA)","mao_de_obra":"Profissional em fim de turno (fadiga)"}'::jsonb, '[{"acao":"Notificar fabricante sobre embalagem","responsavel":"Farmácia","prazo":"2026-05-30","status":"Pendente"},{"acao":"Reforçar POP de dupla checagem","responsavel":"Enf. Maria Souza","prazo":"2026-05-20","status":"Concluído"}]'::jsonb, 'Enf. Maria Souza'),
-        ('Quase Falha na Identificação no Centro Cirúrgico', 'Paciente quase foi encaminhado para sala incorreta, erro detectado na checagem da pulseira.', 'Quase Falha (Near Miss)', 'Leve', 'Centro Cirúrgico', 'Encerrado', '{"metodo":"Falha na comunicação na transferência","mao_de_obra":"Maqueiro novo sem treinamento completo"}'::jsonb, '[{"acao":"Treinamento de integração para maqueiros","responsavel":"RH","prazo":"2026-05-15","status":"Concluído"}]'::jsonb, 'Dr. Carlos Mendes');
+        ('Troca de Medicação na UTI', 'Paciente recebeu 10mg de medicação X em vez de Y devido a semelhança na embalagem.', 'UTI', 'Enf. Maria Souza', 'Em Investigação IA', 'Evento Adverso', 'Grave', '{"metodo":"Falta de dupla checagem","material":"Embalagens muito similares (LASA)","mao_de_obra":"Profissional em fim de turno (fadiga)"}'::jsonb, '[{"acao":"Notificar fabricante sobre embalagem","responsavel":"Farmácia","prazo":"2026-05-30","status":"Pendente"},{"acao":"Reforçar POP de dupla checagem","responsavel":"Enf. Maria Souza","prazo":"2026-05-20","status":"Concluído"}]'::jsonb, 'Unidade Central'),
+        ('Quase Falha na Identificação no Centro Cirúrgico', 'Paciente quase foi encaminhado para sala incorreta, erro detectado na checagem da pulseira.', 'Centro Cirúrgico', 'Dr. Carlos Mendes', 'Encerrado', 'Quase Falha (Near Miss)', 'Leve', '{"metodo":"Falha na comunicação na transferência","mao_de_obra":"Maqueiro novo sem treinamento completo"}'::jsonb, '[{"acao":"Treinamento de integração para maqueiros","responsavel":"RH","prazo":"2026-05-15","status":"Concluído"}]'::jsonb, 'Unidade Central');
       `);
     }
 
@@ -1043,17 +1352,120 @@ export async function initDb() {
         VALUES 
         ('admin@qualitaos.com', 'LOGIN_SUCCESS', 'AUTH', null, '192.168.1.50'),
         ('maria.souza@qualitaos.com', 'POP_CREATE', 'POPs', 'POP-GER-001', '192.168.1.102'),
-        ('carlos.mendes@qualitaos.com', 'INCIDENT_REGISTER', 'Incidentes', '1', '192.168.1.205'),
+        ('carlos.mendes@qualitaos.com', 'INCIDENT_REGISTER', 'core_ocorrencias', '1', '192.168.1.205'),
         ('ana.lima@qualitaos.com', 'ONA_EVIDENCE_UPLOAD', 'ONA', 'ONA-1.1', '192.168.1.88');
       `);
     }
 
-    // Inicializa Módulo ONA (Tabelas e Seeds)
-    await initOnaTables(pool);
-    await seedOnaModule(pool);
+    // Seeds para PAL e OMOC
+    const checkPalPlanos = await client.query('SELECT COUNT(*) FROM pal_planos');
+    if (parseInt(checkPalPlanos.rows[0].count) === 0) {
+      console.log('Realizando seed inicial de planos e assinaturas PAL...');
+      const planoEssencial = await client.query(`
+        INSERT INTO pal_planos (nome, features_ativas, cota_documentos, cota_usuarios, preco_mensal)
+        VALUES ('Essencial', '["feature:omoc:core", "feature:pops:core"]'::jsonb, 5, 5, 199.00)
+        RETURNING id;
+      `);
+      
+      const planoPremium = await client.query(`
+        INSERT INTO pal_planos (nome, features_ativas, cota_documentos, cota_usuarios, preco_mensal)
+        VALUES ('Premium', '["feature:omoc:core", "feature:lms:core", "feature:ai:ishikawa", "feature:billing:core", "feature:pops:core", "feature:bpm:core", "feature:riscos:core", "feature:audit:core", "feature:okr:core"]'::jsonb, 10000, 100, 499.00)
+        RETURNING id;
+      `);
 
-    // Inicializa Core Platform (Governança e Inteligência Operacional)
-    await initCoreTables(pool);
+      const essencialId = planoEssencial.rows[0].id;
+      const premiumId = planoPremium.rows[0].id;
+
+      // Assinatura Unidade Central
+      await client.query(`
+        INSERT INTO pal_assinaturas (tenant_id, plano_id, status)
+        VALUES ('Unidade Central', $1, 'ACTIVE');
+      `, [premiumId]);
+
+      // Assinatura Santa Casa
+      await client.query(`
+        INSERT INTO pal_assinaturas (tenant_id, plano_id, status)
+        VALUES ('Santa Casa', $1, 'ACTIVE');
+      `, [essencialId]);
+
+      // Assinatura Clínica B
+      await client.query(`
+        INSERT INTO pal_assinaturas (tenant_id, plano_id, status)
+        VALUES ('Clínica B', $1, 'ACTIVE');
+      `, [essencialId]);
+
+      // Fatura vencida de Clínica B (venceu há 7 dias)
+      await client.query(`
+        INSERT INTO pal_faturas (tenant_id, valor, status, data_vencimento)
+        VALUES ('Clínica B', 199.00, 'PENDING', NOW() - INTERVAL '7 days');
+      `);
+    }
+
+    const checkOmocCargos = await client.query('SELECT COUNT(*) FROM omoc_cargos');
+    if (parseInt(checkOmocCargos.rows[0].count) === 0) {
+      console.log('Realizando seed inicial de cargos, ocupações e reportes OMOC...');
+      
+      const cargoDir = await client.query(`
+        INSERT INTO omoc_cargos (tenant_id, nome, descricao, setor, limite_vagas)
+        VALUES ('Unidade Central', 'Diretor Geral', 'Direção Geral da Unidade', 'Gestão', 1)
+        RETURNING id;
+      `);
+
+      const cargoCoord = await client.query(`
+        INSERT INTO omoc_cargos (tenant_id, nome, descricao, setor, limite_vagas)
+        VALUES ('Unidade Central', 'Coordenador de UTI', 'Responsável pela Coordenação da UTI', 'Enfermagem', 1)
+        RETURNING id;
+      `);
+
+      const cargoEnf = await client.query(`
+        INSERT INTO omoc_cargos (tenant_id, nome, descricao, setor, limite_vagas)
+        VALUES ('Unidade Central', 'Enfermeiro Assistencial', 'Atuação assistencial direta', 'Enfermagem', 5)
+        RETURNING id;
+      `);
+
+      const dirId = cargoDir.rows[0].id;
+      const coordId = cargoCoord.rows[0].id;
+      const enfId = cargoEnf.rows[0].id;
+
+      // Inserindo reportes (hierarquia)
+      await client.query(`
+        INSERT INTO omoc_reportes (tenant_id, cargo_subordinado_id, cargo_superior_id, tipo)
+        VALUES ('Unidade Central', $1, $2, 'direto');
+      `, [coordId, dirId]);
+
+      await client.query(`
+        INSERT INTO omoc_reportes (tenant_id, cargo_subordinado_id, cargo_superior_id, tipo)
+        VALUES ('Unidade Central', $1, $2, 'direto');
+      `, [enfId, coordId]);
+
+      // Vinculando usuários existentes aos cargos
+      const userAdmin = await client.query("SELECT id FROM usuarios WHERE email = 'admin@qualitaos.com'");
+      if (userAdmin.rows.length > 0) {
+        await client.query(`
+          INSERT INTO omoc_ocupacoes (tenant_id, usuario_id, cargo_id)
+          VALUES ('Unidade Central', $1, $2);
+        `, [userAdmin.rows[0].id, dirId]);
+      }
+
+      const userMaria = await client.query("SELECT id FROM usuarios WHERE email = 'maria.souza@qualitaos.com'");
+      if (userMaria.rows.length > 0) {
+        await client.query(`
+          INSERT INTO omoc_ocupacoes (tenant_id, usuario_id, cargo_id)
+          VALUES ('Unidade Central', $1, $2);
+        `, [userMaria.rows[0].id, enfId]);
+      }
+
+      const userAna = await client.query("SELECT id FROM usuarios WHERE email = 'ana.lima@qualitaos.com'");
+      if (userAna.rows.length > 0) {
+        await client.query(`
+          INSERT INTO omoc_ocupacoes (tenant_id, usuario_id, cargo_id)
+          VALUES ('Unidade Central', $1, $2);
+        `, [userAna.rows[0].id, coordId]);
+      }
+    }
+
+    // Inicializa Seeds Secundários
+    await seedOnaModule(pool);
     await seedCoreModule(pool);
 
     console.log('Banco de dados inicializado com sucesso!');

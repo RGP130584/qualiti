@@ -34,13 +34,10 @@ export default function OkrsPage() {
   async function fetchInitialData() {
     setLoading(true);
     try {
-      const token = localStorage.getItem('qualita_token');
-      if (token) {
-        const authRes = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
-        if (authRes.ok) {
-          const userData = await authRes.json();
-          setUser({ ...userData, isGlobalAdmin: userData.role === 'Admin' || userData.departamento === 'Diretoria' });
-        }
+      const authRes = await fetch('/api/auth/me');
+      if (authRes.ok) {
+        const userData = await authRes.json();
+        setUser({ ...userData, isGlobalAdmin: userData.role === 'Admin' || userData.departamento === 'Diretoria' });
       }
 
       const [okrsRes, cyclesRes] = await Promise.all([

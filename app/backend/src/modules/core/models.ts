@@ -22,6 +22,12 @@ export interface CoreOcorrencia {
   eventos_correlacionados?: any;
   plano_capa?: any;
   status: string;
+  // Legacy incidents fields
+  tipo?: string;
+  severidade?: string;
+  causa_raiz_ishikawa?: any;
+  plano_acao_capa?: any;
+  tenant_id?: string;
   created_at?: string;
   updated_at?: string;
   deleted_at?: string;
@@ -126,25 +132,11 @@ export async function initCoreTables(pool: Pool): Promise<void> {
         eventos_correlacionados JSONB DEFAULT '[]'::jsonb,
         plano_capa JSONB DEFAULT '[]'::jsonb,
         status VARCHAR(50) DEFAULT 'Pendente',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        deleted_at TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS core_documentos (
-        id SERIAL PRIMARY KEY,
-        codigo VARCHAR(50) UNIQUE NOT NULL,
-        titulo VARCHAR(255) NOT NULL,
-        categoria VARCHAR(100) NOT NULL,
-        setor VARCHAR(100) NOT NULL,
-        versao VARCHAR(20) DEFAULT '1.0',
-        conteudo TEXT NOT NULL,
-        autor VARCHAR(100) NOT NULL,
-        status_aprovacao VARCHAR(50) DEFAULT 'Pendente',
-        ocr_texto TEXT,
-        embeddings JSONB,
-        documentos_impactados JSONB DEFAULT '[]'::jsonb,
-        rastreabilidade_normas JSONB DEFAULT '[]'::jsonb,
+        tipo VARCHAR(100),
+        severidade VARCHAR(50),
+        causa_raiz_ishikawa JSONB DEFAULT '{}'::jsonb,
+        plano_acao_capa JSONB DEFAULT '[]'::jsonb,
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         deleted_at TIMESTAMP
@@ -161,6 +153,7 @@ export async function initCoreTables(pool: Pool): Promise<void> {
         heatmap_data JSONB DEFAULT '[]'::jsonb,
         ia_auditor_virtual TEXT,
         status VARCHAR(50) DEFAULT 'Em Andamento',
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -175,6 +168,7 @@ export async function initCoreTables(pool: Pool): Promise<void> {
         mapa_dinamico_coords JSONB DEFAULT '{}'::jsonb,
         correlao_eventos JSONB DEFAULT '[]'::jsonb,
         status VARCHAR(50) DEFAULT 'Monitorado',
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -186,6 +180,7 @@ export async function initCoreTables(pool: Pool): Promise<void> {
         setor VARCHAR(100) NOT NULL,
         rastreabilidade_indicadores JSONB DEFAULT '[]'::jsonb,
         status VARCHAR(50) DEFAULT 'Registrado',
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -196,6 +191,7 @@ export async function initCoreTables(pool: Pool): Promise<void> {
         benchmarking_mercado NUMERIC(5,2) DEFAULT 80.00,
         alertas_inteligentes JSONB DEFAULT '[]'::jsonb,
         bi_operacional_data JSONB DEFAULT '{}'::jsonb,
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -207,6 +203,7 @@ export async function initCoreTables(pool: Pool): Promise<void> {
         prompt TEXT NOT NULL,
         resposta TEXT NOT NULL,
         acoes_recomendadas JSONB DEFAULT '[]'::jsonb,
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);

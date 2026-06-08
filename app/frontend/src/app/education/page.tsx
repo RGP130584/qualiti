@@ -43,16 +43,13 @@ export default function EducationPage() {
   async function fetchInitialData() {
     setLoading(true);
     try {
-      const token = localStorage.getItem('qualita_token');
       let currentUser = { nome: 'Enf. Maria Souza', email: 'maria.souza@qualitaos.com', role: 'Enfermeiro', departamento: 'Enfermagem', isGlobalAdmin: false };
       
-      if (token) {
-        const authRes = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
-        if (authRes.ok) {
-          const userData = await authRes.json();
-          currentUser = { ...userData, email: userData.email || currentUser.email, isGlobalAdmin: userData.role === 'Admin' || userData.departamento === 'Diretoria' };
-          setUser(currentUser);
-        }
+      const authRes = await fetch('/api/auth/me');
+      if (authRes.ok) {
+        const userData = await authRes.json();
+        currentUser = { ...userData, email: userData.email || currentUser.email, isGlobalAdmin: userData.role === 'Admin' || userData.departamento === 'Diretoria' };
+        setUser(currentUser);
       }
 
       const [coursesRes, progRes, tracksRes, compRes, badgesRes, libRes, anRes, aiRes] = await Promise.all([
@@ -238,7 +235,7 @@ export default function EducationPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '2.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2.5rem' }}>
                 {integrationCourses.map(curso => {
                   const isCertGerado = !!progressData.certificados[curso.id];
                   return (
@@ -325,7 +322,7 @@ export default function EducationPage() {
                 <span className="badge" style={{ background: '#3b82f6', color: 'white', fontWeight: 800, padding: '0.6rem 1.2rem', fontSize: '0.9rem' }}>{tracks.length} Trilhas Ativas</span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
                 {tracks.length === 0 ? (
                   <div className="card" style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontSize: '1.1rem' }}>Nenhuma trilha curricular cadastrada para o setor {user.departamento}.</div>
                 ) : tracks.map(tr => (
@@ -372,7 +369,7 @@ export default function EducationPage() {
                 <span className="badge" style={{ background: '#10b981', color: 'white', fontWeight: 800, padding: '0.6rem 1.2rem', fontSize: '0.9rem' }}>Nível Exigido: Pleno / Avançado</span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
                 {competencies.map(comp => (
                   <div key={comp.id} className="card" style={{ padding: '2.5rem', display: 'flex', flexDirection: 'column', gap: '2rem', borderRadius: '20px', border: '1px solid #cbd5e1', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)', background: 'white' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '1.5rem' }}>
@@ -438,7 +435,7 @@ export default function EducationPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
                 {filteredLibrary.length === 0 ? (
                   <div className="card" style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontSize: '1.1rem' }}>Nenhum material encontrado na biblioteca para a sua busca.</div>
                 ) : filteredLibrary.map(lib => (
@@ -487,7 +484,7 @@ export default function EducationPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
                 {badges.map(bg => (
                   <div key={bg.id} className="card" style={{ padding: '2.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '1.5rem', borderRadius: '20px', border: '2px solid #fbcfe8', background: 'white', boxShadow: '0 10px 25px -5px rgba(236,72,153,0.1)' }}>
                     <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, #fcc2d7, #f06595)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 20px rgba(240,101,149,0.3)' }}>
@@ -519,7 +516,7 @@ export default function EducationPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
                 {aiRecommendations.length === 0 ? (
                   <div className="card" style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontSize: '1.1rem' }}>Nenhuma recomendação de reciclagem pendente no momento. Sua conformidade está excelente!</div>
                 ) : aiRecommendations.map((rec, idx) => (
@@ -563,7 +560,7 @@ export default function EducationPage() {
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2.5rem' }}>
                 <div className="card" style={{ padding: '2.5rem', borderRadius: '20px', border: '1px solid #cbd5e1', background: 'white' }}>
                   <h3 style={{ margin: '0 0 1.5rem 0', fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Aderência & Conformidade Institucional</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>

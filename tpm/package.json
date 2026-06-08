@@ -1,0 +1,22 @@
+{
+  "name": "qualiti-tpm-cli",
+  "version": "1.0.0",
+  "description": "Trusted Cognitive Platform (TPM) - Quality and Security Gate CLI",
+  "main": "dist/index.js",
+  "bin": {
+    "tpm": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "scan": "ts-node src/index.ts"
+  },
+  "dependencies": {
+    "yaml": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}

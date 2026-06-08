@@ -1,9 +1,15 @@
 import { FastifyInstance } from 'fastify';
 import pool from '../db';
+import { authenticate } from '../utils/auth';
+import { requireFeature } from '../utils/feature-guard';
 
 export default async function aiRoutes(fastify: FastifyInstance) {
+  // Aplica autenticação e feature flag para todas as rotas de IA neste arquivo
+  fastify.addHook('preHandler', authenticate);
+  fastify.addHook('preHandler', requireFeature('feature:ai:ishikawa'));
+
   // Geração de rascunho de POP via IA
-  fastify.post('/ai/generate-pop', async (request, reply) => {
+  fastify.post('/ai/generate-pop', async (request: any, reply) => {
     const { titulo, setor, palavrasChave, provider } = request.body as any;
     
     // Simulação robusta para MVP / Demonstração
@@ -30,12 +36,13 @@ Aplica-se a todos os profissionais atuantes no setor de ${setor} e equipes multi
 - Normas Regulamentadoras e Boas Práticas Hospitalares.`;
 
     // Log de auditoria
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
       await client.query(`
-        INSERT INTO auditoria_logs (usuario, acao, entidade, ip)
-        VALUES ('Admin / IA', 'AI_POP_GENERATE', 'AI_ASSISTANT', $1)
-      `, [request.ip]);
+        INSERT INTO auditoria_logs (usuario, acao, entidade, ip, tenant_id)
+        VALUES ($1, 'AI_POP_GENERATE', 'AI_ASSISTANT', $2, $3)
+      `, [request.user.email || 'Admin / IA', request.ip, tenantId]);
     } finally {
       client.release();
     }

@@ -12,8 +12,8 @@ import { OnaDiagnostico, OnaEvidencia, OnaAuditoria, OnaPlanoAcao } from './mode
 export class OnaDiagnosticoService {
   private repo = new OnaDiagnosticoRepository();
 
-  async getGapAnalysis(setor?: string, nivel?: number) {
-    const list = await this.repo.findAll(setor, nivel);
+  async getGapAnalysis(tenantId: string, setor?: string, nivel?: number) {
+    const list = await this.repo.findAll(tenantId, setor, nivel);
     
     const total = list.length;
     if (total === 0) return { total: 0, score_geral: 0, gaps: [], conformidade_dist: { Conforme: 0, Parcial: 0, NaoConforme: 0 } };
@@ -46,27 +46,27 @@ export class OnaDiagnosticoService {
     };
   }
 
-  async createDiagnostico(data: OnaDiagnostico, usuario: string) {
-    return await this.repo.create(data, usuario);
+  async createDiagnostico(tenantId: string, data: OnaDiagnostico, usuario: string) {
+    return await this.repo.create(tenantId, data, usuario);
   }
 
-  async updateDiagnostico(id: number, data: Partial<OnaDiagnostico>, usuario: string) {
-    return await this.repo.update(id, data, usuario);
+  async updateDiagnostico(tenantId: string, id: number, data: Partial<OnaDiagnostico>, usuario: string) {
+    return await this.repo.update(tenantId, id, data, usuario);
   }
 
-  async deleteDiagnostico(id: number, usuario: string) {
-    return await this.repo.softDelete(id, usuario);
+  async deleteDiagnostico(tenantId: string, id: number, usuario: string) {
+    return await this.repo.softDelete(tenantId, id, usuario);
   }
 }
 
 export class OnaEvidenciaService {
   private repo = new OnaEvidenciaRepository();
 
-  async listEvidencias(requisito_id?: number) {
-    return await this.repo.findAll(requisito_id);
+  async listEvidencias(tenantId: string, requisito_id?: number) {
+    return await this.repo.findAll(tenantId, requisito_id);
   }
 
-  async processEvidenceUpload(data: OnaEvidencia, usuario: string) {
+  async processEvidenceUpload(tenantId: string, data: OnaEvidencia, usuario: string) {
     // Simulação avançada de OCR e Geração de Embeddings (RAG / Vector DB)
     const ocrSimulado = `[OCR AUTOMÁTICO - INSTITUIÇÃO QUALITAOS]\nDocumento: ${data.nome_arquivo}\nConteúdo extraído referente ao requisito normativo. O processo atende às exigências de segurança do paciente, rastreabilidade de insumos e padronização operacional descrita no manual ONA.`;
     
@@ -80,27 +80,27 @@ export class OnaEvidenciaService {
       status_aprovacao: 'Pendente'
     };
 
-    return await this.repo.create(evidenciaCompleta, usuario);
+    return await this.repo.create(tenantId, evidenciaCompleta, usuario);
   }
 
-  async evaluateEvidence(id: number, status: 'Aprovado' | 'Rejeitado', usuario: string) {
-    return await this.repo.updateStatus(id, status, usuario);
+  async evaluateEvidence(tenantId: string, id: number, status: 'Aprovado' | 'Rejeitado', usuario: string) {
+    return await this.repo.updateStatus(tenantId, id, status, usuario);
   }
 
-  async deleteEvidence(id: number, usuario: string) {
-    return await this.repo.softDelete(id, usuario);
+  async deleteEvidence(tenantId: string, id: number, usuario: string) {
+    return await this.repo.softDelete(tenantId, id, usuario);
   }
 }
 
 export class OnaChecklistService {
   private repo = new OnaChecklistRepository();
 
-  async listChecklists(nivel?: number) {
-    return await this.repo.findAll(nivel);
+  async listChecklists(tenantId: string, nivel?: number) {
+    return await this.repo.findAll(tenantId, nivel);
   }
 
-  async executeChecklistValuation(id: number, conformidade: 'Conforme' | 'Parcial' | 'Não Conforme', pontuacao: number, observacoes: string, evidencias: string[], usuario: string) {
-    return await this.repo.updateConformidade(id, conformidade, pontuacao, observacoes, evidencias, usuario);
+  async executeChecklistValuation(tenantId: string, id: number, conformidade: 'Conforme' | 'Parcial' | 'Não Conforme', pontuacao: number, observacoes: string, evidencias: string[], usuario: string) {
+    return await this.repo.updateConformidade(tenantId, id, conformidade, pontuacao, observacoes, evidencias, usuario);
   }
 }
 
@@ -108,12 +108,12 @@ export class OnaAuditoriaService {
   private repoAuditoria = new OnaAuditoriaRepository();
   private repoPlano = new OnaPlanoAcaoRepository();
 
-  async listAuditorias(setor?: string) {
-    return await this.repoAuditoria.findAll(setor);
+  async listAuditorias(tenantId: string, setor?: string) {
+    return await this.repoAuditoria.findAll(tenantId, setor);
   }
 
-  async createAuditoriaWithCapas(data: OnaAuditoria, usuario: string) {
-    const auditoria = await this.repoAuditoria.create(data, usuario);
+  async createAuditoriaWithCapas(tenantId: string, data: OnaAuditoria, usuario: string) {
+    const auditoria = await this.repoAuditoria.create(tenantId, data, usuario);
 
     // Automação: Criar Planos de Ação (CAPA) automaticamente para cada Não Conformidade registrada
     if (data.nao_conformidades && data.nao_conformidades.length > 0) {
@@ -128,31 +128,31 @@ export class OnaAuditoriaService {
           data_limite: new Date(Date.now() + (nc.criticidade === 'Crítica' ? 24 : 72) * 3600 * 1000),
           alertas_enviados: false
         };
-        await this.repoPlano.create(plano, usuario);
+        await this.repoPlano.create(tenantId, plano, usuario);
       }
     }
 
     return auditoria;
   }
 
-  async updateAuditoriaStatus(id: number, status: 'Agendada' | 'Em Andamento' | 'Concluída' | 'Cancelada', score: number, usuario: string) {
-    return await this.repoAuditoria.updateStatus(id, status, score, usuario);
+  async updateAuditoriaStatus(tenantId: string, id: number, status: 'Agendada' | 'Em Andamento' | 'Concluída' | 'Cancelada', score: number, usuario: string) {
+    return await this.repoAuditoria.updateStatus(tenantId, id, status, score, usuario);
   }
 }
 
 export class OnaPlanoAcaoService {
   private repo = new OnaPlanoAcaoRepository();
 
-  async listPlanos() {
-    return await this.repo.findAll();
+  async listPlanos(tenantId: string) {
+    return await this.repo.findAll(tenantId);
   }
 
-  async createPlano(data: OnaPlanoAcao, usuario: string) {
-    return await this.repo.create(data, usuario);
+  async createPlano(tenantId: string, data: OnaPlanoAcao, usuario: string) {
+    return await this.repo.create(tenantId, data, usuario);
   }
 
-  async updateStatus(id: number, status: 'Pendente' | 'Em Execução' | 'Em Validação' | 'Concluído', usuario: string) {
-    return await this.repo.updateWorkflowStatus(id, status, usuario);
+  async updateStatus(tenantId: string, id: number, status: 'Pendente' | 'Em Execução' | 'Em Validação' | 'Concluído', usuario: string) {
+    return await this.repo.updateWorkflowStatus(tenantId, id, status, usuario);
   }
 }
 
@@ -162,11 +162,11 @@ export class OnaKpiService {
   private repoAud = new OnaAuditoriaRepository();
   private repoPlano = new OnaPlanoAcaoRepository();
 
-  async getExecutiveDashboard() {
-    const kpis = await this.repoKpi.findAll();
-    const diagnosticos = await this.repoDiag.findAll();
-    const auditorias = await this.repoAud.findAll();
-    const planos = await this.repoPlano.findAll();
+  async getExecutiveDashboard(tenantId: string) {
+    const kpis = await this.repoKpi.findAll(tenantId);
+    const diagnosticos = await this.repoDiag.findAll(tenantId);
+    const auditorias = await this.repoAud.findAll(tenantId);
+    const planos = await this.repoPlano.findAll(tenantId);
 
     // Cálculos dinâmicos de BI & Analytics ONA
     const totalReqs = diagnosticos.length;
@@ -206,8 +206,8 @@ export class OnaAiService {
   private repoLog = new OnaAiLogRepository();
   private repoDiag = new OnaDiagnosticoRepository();
 
-  async askCopilot(pergunta: string, usuario: string, setorContexto?: string) {
-    const diagnosticos = await this.repoDiag.findAll(setorContexto);
+  async askCopilot(tenantId: string, pergunta: string, usuario: string, setorContexto?: string) {
+    const diagnosticos = await this.repoDiag.findAll(tenantId, setorContexto);
     
     // RAG Simulado (Busca Semântica na Base de Conhecimento ONA)
     const reqsRelacionados = diagnosticos.slice(0, 3).map(d => ({
@@ -232,7 +232,7 @@ export class OnaAiService {
     }
 
     // Registra a trilha de auditoria da IA
-    const log = await this.repoLog.createLog(usuario, pergunta, respostaIA, reqsRelacionados);
+    const log = await this.repoLog.createLog(tenantId, usuario, pergunta, respostaIA, reqsRelacionados);
 
     return {
       pergunta,
@@ -242,7 +242,7 @@ export class OnaAiService {
     };
   }
 
-  async getAiHistory() {
-    return await this.repoLog.getRecentLogs();
+  async getAiHistory(tenantId: string) {
+    return await this.repoLog.getRecentLogs(tenantId);
   }
 }

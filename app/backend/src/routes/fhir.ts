@@ -1,6 +1,11 @@
 import { FastifyInstance } from 'fastify';
+import { authenticate } from '../utils/auth';
+import { requireFeature } from '../utils/feature-guard';
 
 export default async function fhirRoutes(fastify: FastifyInstance) {
+  // Aplica autenticação e feature flag para todas as rotas deste arquivo
+  fastify.addHook('preHandler', authenticate);
+  fastify.addHook('preHandler', requireFeature('feature:fhir:core'));
   // Metadados do Conector FHIR R4
   fastify.get('/fhir/metadata', async (request, reply) => {
     return {

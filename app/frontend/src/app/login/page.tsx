@@ -24,8 +24,6 @@ export default function LoginPage() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        localStorage.setItem('qualita_token', data.token);
         router.push('/');
       } else {
         const errData = await res.json();
@@ -85,6 +83,12 @@ export default function LoginPage() {
           <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.8rem', justifyContent: 'center' }} disabled={loading}>
             {loading ? 'Autenticando...' : 'Entrar no Sistema'} <ArrowRight size={18} />
           </button>
+
+          <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+            <a href="/wizard" style={{ color: 'var(--sage)', fontSize: '0.9rem', fontWeight: 600, textDecoration: 'none' }}>
+              Cadastrar nova instituição
+            </a>
+          </div>
         </form>
 
         <div style={{ marginTop: '2rem', padding: '1.2rem', background: 'var(--paper)', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.85rem', color: 'var(--muted)' }}>

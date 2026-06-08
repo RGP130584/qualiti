@@ -1,0 +1,68 @@
+project:
+  name: qualiti
+  classification: confidential
+  criticality: high
+  environment: enterprise
+  multi_tenant: true
+
+severities:
+  critical:
+    weight: 100
+    fail_build: true
+  high:
+    weight: 70
+    fail_build: true
+  medium:
+    weight: 40
+    fail_build: false
+  low:
+    weight: 10
+    fail_build: false
+
+policies:
+  clean_architecture:
+    enabled: false
+    severity: high
+    description: "Garante o fluxo correto de dependências entre camadas e proíbe queries SQL raw em controllers e routes."
+    rules:
+      - check_layer_imports
+      - no_raw_sql_in_controllers
+
+  database_ownership:
+    enabled: false
+    severity: high
+    description: "Proíbe escrita cruzada direta de tabelas físicas fora do Bounded Context proprietário."
+    rules:
+      - check_cross_context_write
+
+  domain_dependency:
+    enabled: true
+    severity: high
+    description: "Valida acoplamento síncrono e dependências entre Bounded Contexts em desacordo com o Context Map."
+    rules:
+      - check_context_map_coupling
+
+  security_validation:
+    enabled: true
+    severity: critical
+    description: "Scanner de segredos hardcoded, chaves expostas no código, CORS aberto e cookies inseguros."
+    rules:
+      - check_hardcoded_secrets
+      - check_cors_wildcard
+      - check_cookie_httponly
+
+  package_vulnerability:
+    enabled: false
+    severity: critical
+    description: "Análise de vulnerabilidades CVE críticas e de alta severidade em pacotes NPM."
+    rules:
+      - check_npm_audit
+
+  code_hygiene:
+    enabled: true
+    severity: low
+    description: "Verifica arquivos vazios, uso de termos obsoletos na linguagem ubíqua e imutabilidade de eventos de domínio."
+    rules:
+      - check_empty_files
+      - check_obsolete_language
+      - check_event_immutability

@@ -46,11 +46,11 @@ export async function seedCoreModule(pool: Pool): Promise<void> {
       );
     `);
 
-    // 2. Gestão Documental Inteligente (com OCR e Embeddings RAG)
-    await client.query(`
-      INSERT INTO core_documentos (
+    // 2. Gestão Documental Inteligente (com OCR e Embeddings RAG) - Semeado diretamente em pops e pop_versoes
+    const resDoc1 = await client.query(`
+      INSERT INTO pops (
         codigo, titulo, categoria, setor, versao, conteudo, autor,
-        status_aprovacao, ocr_texto, embeddings, documentos_impactados, rastreabilidade_normas
+        status, ocr_texto, embeddings, documentos_impactados, rastreabilidade_normas, tenant_id
       ) VALUES 
       (
         'DOC-CORE-001', 'Política Institucional de Governança Clínica e Compliance', 'Governança', 'Diretoria', '3.0',
@@ -59,8 +59,23 @@ export async function seedCoreModule(pool: Pool): Promise<void> {
         '[OCR] A presente política estabelece as diretrizes de integridade, transparência e gestão de riscos para todo o corpo clínico e assistencial da instituição, assegurando conformidade com as normas ONA, ISO 9001 e LGPD. Requisitos mandatórios: dupla checagem, notificação de near miss e proteção de dados do prontuário.',
         '[-0.012, 0.045, -0.078, 0.112, 0.034, -0.056, 0.089, -0.023, 0.067, -0.011]'::jsonb,
         '["POP-ENF-001", "POP-FAR-004"]'::jsonb,
-        '["ONA Nível 3", "ISO 9001:2015", "LGPD - Lei 13.709/2018"]'::jsonb
-      ),
+        '["ONA Nível 3", "ISO 9001:2015", "LGPD - Lei 13.709/2018"]'::jsonb,
+        'Unidade Central'
+      ) RETURNING id;
+    `);
+
+    if (resDoc1.rows.length > 0) {
+      await client.query(`
+        INSERT INTO pop_versoes (pop_id, versao, conteudo, autor)
+        VALUES ($1, '3.0', 'A presente política estabelece as diretrizes de integridade, transparência e gestão de riscos para todo o corpo clínico e assistencial da instituição, assegurando conformidade com as normas ONA, ISO 9001 e LGPD.', 'Dr. Roberto Santos')
+      `, [resDoc1.rows[0].id]);
+    }
+
+    const resDoc2 = await client.query(`
+      INSERT INTO pops (
+        codigo, titulo, categoria, setor, versao, conteudo, autor,
+        status, ocr_texto, embeddings, documentos_impactados, rastreabilidade_normas, tenant_id
+      ) VALUES 
       (
         'DOC-CORE-002', 'Protocolo de Segurança e Rastreabilidade do Prontuário Eletrônico', 'Segurança da Informação', 'TI & Analytics', '2.1',
         'Define as regras de controle de acesso (RBAC), criptografia de repouso e trilhas de auditoria imutáveis para garantir a privacidade dos pacientes e o atendimento estrito à LGPD.',
@@ -68,9 +83,17 @@ export async function seedCoreModule(pool: Pool): Promise<void> {
         '[OCR] Define as regras de controle de acesso (RBAC), criptografia de repouso e trilhas de auditoria imutáveis para garantir a privacidade dos pacientes e o atendimento estrito à LGPD. Compartilhamento de senhas é considerado infração gravíssima.',
         '[0.023, -0.034, 0.056, -0.067, 0.012, 0.089, -0.045, 0.078, -0.012, 0.034]'::jsonb,
         '["Manual de Integração FHIR"]'::jsonb,
-        '["LGPD", "HIPAA", "ONA Nível 2"]'::jsonb
-      );
+        '["LGPD", "HIPAA", "ONA Nível 2"]'::jsonb,
+        'Unidade Central'
+      ) RETURNING id;
     `);
+
+    if (resDoc2.rows.length > 0) {
+      await client.query(`
+        INSERT INTO pop_versoes (pop_id, versao, conteudo, autor)
+        VALUES ($1, '2.1', 'Define as regras de controle de acesso (RBAC), criptografia de repouso e trilhas de auditoria imutáveis para garantir a privacidade dos pacientes e o atendimento estrito à LGPD.', 'Lucas Almeida')
+      `, [resDoc2.rows[0].id]);
+    }
 
     // 3. Auditoria Inteligente
     await client.query(`

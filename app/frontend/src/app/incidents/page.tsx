@@ -287,7 +287,7 @@ export default function IncidentsPage() {
             <button onClick={() => setIsCreating(false)} className="btn btn-secondary" style={{ padding: '0.5rem' }}><X size={20} /></button>
           </div>
 
-          <form onSubmit={handleSaveOcorrencia} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2.5rem' }}>
+          <form onSubmit={handleSaveOcorrencia} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2.5rem' }}>
             {/* COLUNA ESQUERDA: INPUT DO USUÁRIO */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.8rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
@@ -407,7 +407,7 @@ export default function IncidentsPage() {
 
           <form onSubmit={handleSaveCapaFinal} style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
             {/* RESUMO DO EVENTO E PREDIÇÃO IA */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', background: '#f8fafc', padding: '1.8rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', background: '#f8fafc', padding: '1.8rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
               <div>
                 <strong style={{ display: 'block', color: '#64748b', fontSize: '0.85rem', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Resumo do Relato:</strong>
                 <h4 style={{ margin: '0 0 0.4rem 0', fontSize: '1.1rem', color: '#0f172a' }}>{selectedInc.titulo}</h4>

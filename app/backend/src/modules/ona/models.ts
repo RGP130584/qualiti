@@ -123,6 +123,7 @@ export async function initOnaTables(pool: Pool): Promise<void> {
         prazo TIMESTAMP,
         gap_analysis TEXT,
         score_conformidade NUMERIC(5,2) DEFAULT 50.00,
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         deleted_at TIMESTAMP DEFAULT NULL
@@ -141,6 +142,7 @@ export async function initOnaTables(pool: Pool): Promise<void> {
         autor VARCHAR(255) NOT NULL,
         ocr_texto TEXT,
         embeddings JSONB DEFAULT '[]'::jsonb,
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         deleted_at TIMESTAMP DEFAULT NULL
@@ -160,6 +162,7 @@ export async function initOnaTables(pool: Pool): Promise<void> {
         observacoes TEXT,
         evidencias_vinculadas JSONB DEFAULT '[]'::jsonb,
         audit_trail JSONB DEFAULT '[]'::jsonb,
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         deleted_at TIMESTAMP DEFAULT NULL
@@ -180,6 +183,7 @@ export async function initOnaTables(pool: Pool): Promise<void> {
         evidencias_registradas JSONB DEFAULT '[]'::jsonb,
         nao_conformidades JSONB DEFAULT '[]'::jsonb,
         plano_corretivo_capa JSONB DEFAULT '[]'::jsonb,
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         deleted_at TIMESTAMP DEFAULT NULL
@@ -198,6 +202,7 @@ export async function initOnaTables(pool: Pool): Promise<void> {
         workflow_status VARCHAR(50) DEFAULT 'Pendente',
         data_limite TIMESTAMP,
         alertas_enviados BOOLEAN DEFAULT FALSE,
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         deleted_at TIMESTAMP DEFAULT NULL
@@ -216,6 +221,7 @@ export async function initOnaTables(pool: Pool): Promise<void> {
         tendencia VARCHAR(50) DEFAULT 'Estável',
         historico_mensal JSONB DEFAULT '[]'::jsonb,
         heatmap_data JSONB DEFAULT '[]'::jsonb,
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -229,6 +235,7 @@ export async function initOnaTables(pool: Pool): Promise<void> {
         pergunta TEXT NOT NULL,
         resposta TEXT NOT NULL,
         requisitos_referenciados JSONB DEFAULT '[]'::jsonb,
+        tenant_id VARCHAR(100) DEFAULT 'Unidade Central',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);

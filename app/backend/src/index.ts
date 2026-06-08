@@ -1,6 +1,8 @@
 import fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import cookie from '@fastify/cookie';
+import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import dotenv from 'dotenv';
@@ -20,8 +22,15 @@ import auditRoutes from './routes/audit';
 import adminRoutes from './routes/admin';
 import okrsRoutes from './routes/okrs';
 import educationRoutes from './routes/education';
+import eventRoutes from './routes/events';
+import palRoutes from './routes/pal';
+import omocRoutes from './routes/omoc';
 import { onaV2Routes } from './modules/ona/controllers';
 import { coreV2Routes } from './modules/core/controllers';
+import { initListeners } from './modules/core/listeners';
+import { startSlaWorker } from './workers/sla-worker';
+import { startUsageWorker } from './workers/usage-worker';
+import { startSuspensionWorker } from './workers/suspension-worker';
 
 dotenv.config();
 
@@ -30,17 +39,53 @@ const server = fastify({
 });
 
 async function main() {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('CRITICAL CONFIGURATION ERROR: JWT_SECRET environment variable is not defined!');
+  }
+
   // Inicializa Banco de Dados e Seed
   await initDb();
 
+  // Inicializa Listeners de Eventos
+  initListeners();
+
+  // Inicializa Worker de SLA em Background
+  startSlaWorker();
+
+  // Inicializa Workers de Uso e Suspensão em Background
+  startUsageWorker();
+  startSuspensionWorker();
+
   // Registra CORS
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(o => o.trim());
   await server.register(cors, {
-    origin: '*',
+    origin: (origin, cb) => {
+      if (!origin) {
+        cb(null, true);
+        return;
+      }
+      if (allowedOrigins.includes(origin)) {
+        cb(null, true);
+      } else {
+        cb(new Error('CORS Error: Origin not allowed'), false);
+      }
+    },
+    credentials: true,
+  });
+
+  // Registra Cookie
+  await server.register(cookie, {
+    secret: process.env.JWT_SECRET,
+  });
+
+  // Registra Rate Limit (global: false, ativo sob demanda nas rotas críticas)
+  await server.register(rateLimit, {
+    global: false,
   });
 
   // Registra JWT
   await server.register(jwt, {
-    secret: process.env.JWT_SECRET || 'super_secret_qualita_jwt_key_2026_secure',
+    secret: process.env.JWT_SECRET,
   });
 
   // Registra Swagger (OpenAPI 3.0)
@@ -98,6 +143,9 @@ async function main() {
   server.register(educationRoutes, { prefix: '/api' });
   server.register(onaV2Routes, { prefix: '/api' });
   server.register(coreV2Routes, { prefix: '/api' });
+  server.register(eventRoutes, { prefix: '/api' });
+  server.register(palRoutes, { prefix: '/api' });
+  server.register(omocRoutes, { prefix: '/api' });
 
   // Rota de status geral
   server.get('/api/health', async (request, reply) => {

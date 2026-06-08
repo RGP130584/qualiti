@@ -274,7 +274,7 @@ export default function AiPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2.5rem' }}>
             {/* COLUNA ESQUERDA: PROMPT E PERGUNTA */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {/* PROMPT DE EXEMPLO RÁPIDO */}
@@ -397,7 +397,7 @@ export default function AiPage() {
       {/* ========================================== */}
       {/* MÓDULOS LEGADOS PRESERVADOS (GERADOR DE POP E RESUMO INCIDENTES) */}
       {/* ========================================== */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '2.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2.5rem' }}>
         {/* GERADOR DE POPS VIA IA */}
         <div className="card" style={{ borderTop: '4px solid #10b981', background: 'white', padding: '2.5rem', borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div>

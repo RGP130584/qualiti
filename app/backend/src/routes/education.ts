@@ -1,23 +1,51 @@
 import { FastifyInstance } from 'fastify';
 import pool from '../db';
+import { eventBus } from '../utils/event-bus';
+import { authenticate } from '../utils/auth';
+import { requireFeature } from '../utils/feature-guard';
 
 export default async function educationRoutes(fastify: FastifyInstance) {
+  // Aplica autenticação e feature flag para todas as rotas deste arquivo
+  fastify.addHook('preHandler', authenticate);
+  fastify.addHook('preHandler', requireFeature('feature:lms:core'));
+
   // Lista todos os cursos com seus módulos e lições associadas
-  fastify.get('/education/courses', async (request, reply) => {
+  fastify.get('/education/courses', async (request: any, reply) => {
     const { setor } = request.query as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
-      let queryStr = 'SELECT * FROM education_courses WHERE ativo = TRUE ORDER BY id ASC';
-      const params: any[] = [];
+      let queryStr = 'SELECT * FROM education_courses WHERE tenant_id = $1 AND ativo = TRUE ORDER BY id ASC';
+      const params: any[] = [tenantId];
       if (setor && setor !== 'Diretoria Geral' && setor !== 'Qualidade e ONA') {
-        queryStr = 'SELECT * FROM education_courses WHERE (setor = $1 OR setor = \'Geral\') AND ativo = TRUE ORDER BY id ASC';
+        queryStr = 'SELECT * FROM education_courses WHERE tenant_id = $1 AND (setor = $2 OR setor = \'Geral\') AND ativo = TRUE ORDER BY id ASC';
         params.push(setor);
       }
       const resCourses = await client.query(queryStr, params);
 
-      const resMods = await client.query('SELECT * FROM education_modules ORDER BY ordem ASC');
-      const resLessons = await client.query('SELECT * FROM education_lessons ORDER BY ordem ASC');
-      const resQuizzes = await client.query('SELECT * FROM education_quizzes ORDER BY id ASC');
+      const resMods = await client.query(`
+        SELECT m.* FROM education_modules m
+        JOIN education_courses c ON m.curso_id = c.id
+        WHERE c.tenant_id = $1
+        ORDER BY m.ordem ASC
+      `, [tenantId]);
+
+      const resLessons = await client.query(`
+        SELECT l.* FROM education_lessons l
+        JOIN education_modules m ON l.modulo_id = m.id
+        JOIN education_courses c ON m.curso_id = c.id
+        WHERE c.tenant_id = $1
+        ORDER BY l.ordem ASC
+      `, [tenantId]);
+
+      const resQuizzes = await client.query(`
+        SELECT q.* FROM education_quizzes q
+        JOIN education_lessons l ON q.licao_id = l.id
+        JOIN education_modules m ON l.modulo_id = m.id
+        JOIN education_courses c ON m.curso_id = c.id
+        WHERE c.tenant_id = $1
+        ORDER BY q.id ASC
+      `, [tenantId]);
 
       const quizMap: Record<number, any[]> = {};
       for (const q of resQuizzes.rows) {
@@ -47,17 +75,19 @@ export default async function educationRoutes(fastify: FastifyInstance) {
   });
 
   // Cria um novo curso no LMS
-  fastify.post('/education/courses', async (request, reply) => {
+  fastify.post('/education/courses', async (request: any, reply) => {
     const { titulo, descricao, setor, trilha, obrigatorio, sla_horas, carga_horaria, capa_url } = request.body as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
       const res = await client.query(`
-        INSERT INTO education_courses (titulo, descricao, setor, trilha, obrigatorio, sla_horas, carga_horaria, capa_url)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO education_courses (titulo, descricao, setor, trilha, obrigatorio, sla_horas, carga_horaria, capa_url, tenant_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *;
       `, [
         titulo, descricao, setor || 'Geral', trilha || 'Geral', obrigatorio || false, 
-        sla_horas || 72, carga_horaria || 4, capa_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80'
+        sla_horas || 72, carga_horaria || 4, capa_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80',
+        tenantId
       ]);
       return res.rows[0];
     } finally {
@@ -66,11 +96,18 @@ export default async function educationRoutes(fastify: FastifyInstance) {
   });
 
   // Cria um novo módulo para um curso
-  fastify.post('/education/courses/:cursoId/modules', async (request, reply) => {
+  fastify.post('/education/courses/:cursoId/modules', async (request: any, reply) => {
     const { cursoId } = request.params as any;
     const { titulo, ordem, descricao } = request.body as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
+      // Validar propriedade do curso
+      const courseCheck = await client.query('SELECT id FROM education_courses WHERE id = $1 AND tenant_id = $2', [cursoId, tenantId]);
+      if (courseCheck.rows.length === 0) {
+        return reply.status(404).send({ error: 'Curso não encontrado nesta instituição' });
+      }
+
       const res = await client.query(`
         INSERT INTO education_modules (curso_id, titulo, ordem, descricao)
         VALUES ($1, $2, $3, $4)
@@ -83,11 +120,23 @@ export default async function educationRoutes(fastify: FastifyInstance) {
   });
 
   // Cria uma nova lição para um módulo
-  fastify.post('/education/modules/:moduloId/lessons', async (request, reply) => {
+  fastify.post('/education/modules/:moduloId/lessons', async (request: any, reply) => {
     const { moduloId } = request.params as any;
     const { titulo, tipo, conteudo_url, duracao_minutos, ordem } = request.body as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
+      // Validar propriedade do módulo
+      const moduleCheck = await client.query(`
+        SELECT m.id FROM education_modules m
+        JOIN education_courses c ON m.curso_id = c.id
+        WHERE m.id = $1 AND c.tenant_id = $2
+      `, [moduloId, tenantId]);
+
+      if (moduleCheck.rows.length === 0) {
+        return reply.status(404).send({ error: 'Módulo não encontrado nesta instituição' });
+      }
+
       const res = await client.query(`
         INSERT INTO education_lessons (modulo_id, titulo, tipo, conteudo_url, duracao_minutos, ordem)
         VALUES ($1, $2, $3, $4, $5, $6)
@@ -100,10 +149,17 @@ export default async function educationRoutes(fastify: FastifyInstance) {
   });
 
   // Obtém o progresso de um usuário específico
-  fastify.get('/education/progress/:email', async (request, reply) => {
+  fastify.get('/education/progress/:email', async (request: any, reply) => {
     const { email } = request.params as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
+      // Validar que o email pertence ao mesmo tenant
+      const userCheck = await client.query('SELECT id FROM usuarios WHERE email = $1 AND unidade = $2', [email, tenantId]);
+      if (userCheck.rows.length === 0) {
+        return reply.status(404).send({ error: 'Usuário não cadastrado nesta instituição' });
+      }
+
       const resProg = await client.query('SELECT licao_id, concluido, data_conclusao FROM education_progress WHERE usuario_email = $1', [email]);
       const resCert = await client.query('SELECT curso_id, codigo_certificado, data_emissao FROM education_certificates WHERE usuario_email = $1', [email]);
       
@@ -124,12 +180,33 @@ export default async function educationRoutes(fastify: FastifyInstance) {
   });
 
   // Registra a conclusão de uma lição por um usuário
-  fastify.post('/education/lessons/:licaoId/complete', async (request, reply) => {
+  fastify.post('/education/lessons/:licaoId/complete', async (request: any, reply) => {
     const { licaoId } = request.params as any;
     const { email, curso_id } = request.body as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+
+      // Validar que o usuário pertence ao mesmo tenant
+      const userCheck = await client.query('SELECT id FROM usuarios WHERE email = $1 AND unidade = $2', [email, tenantId]);
+      if (userCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return reply.status(404).send({ error: 'Usuário não cadastrado nesta instituição' });
+      }
+
+      // Validar propriedade da lição e do curso
+      const lessonCheck = await client.query(`
+        SELECT l.id FROM education_lessons l
+        JOIN education_modules m ON l.modulo_id = m.id
+        JOIN education_courses c ON m.curso_id = c.id
+        WHERE l.id = $1 AND c.id = $2 AND c.tenant_id = $3
+      `, [licaoId, curso_id, tenantId]);
+
+      if (lessonCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return reply.status(404).send({ error: 'Lição ou Curso inválido para esta instituição' });
+      }
 
       // 1. Marca a lição como concluída
       await client.query(`
@@ -167,6 +244,18 @@ export default async function educationRoutes(fastify: FastifyInstance) {
 
         if (resCert.rows.length > 0) {
           certificadoGerado = resCert.rows[0];
+          
+          // Buscar título do curso para inclusão no payload do evento
+          const courseRes = await client.query('SELECT titulo FROM education_courses WHERE id = $1', [curso_id]);
+          const courseTitle = courseRes.rows[0]?.titulo || 'Curso LMS';
+          
+          // Disparar evento de emissão de certificado
+          eventBus.publish('CertificadoEmitido', {
+            email,
+            curso_titulo: courseTitle,
+            codigo_certificado: codigoCert,
+            tenant_id: tenantId
+          });
         }
       }
 
@@ -175,7 +264,7 @@ export default async function educationRoutes(fastify: FastifyInstance) {
     } catch (err) {
       await client.query('ROLLBACK');
       fastify.log.error(err);
-      reply.status(500).send({ error: 'Erro ao registrar progresso da lição' });
+      return reply.status(500).send({ error: 'Erro ao registrar progresso da lição' });
     } finally {
       client.release();
     }
@@ -185,15 +274,16 @@ export default async function educationRoutes(fastify: FastifyInstance) {
   // ROTAS DA UNIVERSIDADE CORPORATIVA INTELIGENTE
   // ==========================================
 
-  // Lista Trilhas Inteligentes
-  fastify.get('/education/tracks', async (request, reply) => {
+  // Lista Trilhas Inteligentes do tenant
+  fastify.get('/education/tracks', async (request: any, reply) => {
     const { setor } = request.query as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
-      let queryStr = 'SELECT * FROM education_tracks WHERE ativo = TRUE ORDER BY id ASC';
-      const params: any[] = [];
+      let queryStr = 'SELECT * FROM education_tracks WHERE tenant_id = $1 AND ativo = TRUE ORDER BY id ASC';
+      const params: any[] = [tenantId];
       if (setor && setor !== 'Diretoria Geral' && setor !== 'Qualidade e ONA') {
-        queryStr = 'SELECT * FROM education_tracks WHERE (setor = $1 OR setor = \'Geral\') AND ativo = TRUE ORDER BY id ASC';
+        queryStr = 'SELECT * FROM education_tracks WHERE tenant_id = $1 AND (setor = $2 OR setor = \'Geral\') AND ativo = TRUE ORDER BY id ASC';
         params.push(setor);
       }
       const res = await client.query(queryStr, params);
@@ -203,15 +293,16 @@ export default async function educationRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Lista Matriz de Competências e Gaps
-  fastify.get('/education/competencies', async (request, reply) => {
-    const { setor, cargo } = request.query as any;
+  // Lista Matriz de Competências e Gaps do tenant
+  fastify.get('/education/competencies', async (request: any, reply) => {
+    const { setor } = request.query as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
-      let queryStr = 'SELECT * FROM education_competencies ORDER BY id ASC';
-      const params: any[] = [];
+      let queryStr = 'SELECT * FROM education_competencies WHERE tenant_id = $1 ORDER BY id ASC';
+      const params: any[] = [tenantId];
       if (setor && setor !== 'Diretoria Geral' && setor !== 'Qualidade e ONA') {
-        queryStr = 'SELECT * FROM education_competencies WHERE setor = $1 ORDER BY id ASC';
+        queryStr = 'SELECT * FROM education_competencies WHERE tenant_id = $1 AND setor = $2 ORDER BY id ASC';
         params.push(setor);
       }
       const res = await client.query(queryStr, params);
@@ -221,25 +312,27 @@ export default async function educationRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Lista Badges e Gamificação
-  fastify.get('/education/badges', async (request, reply) => {
+  // Lista Badges e Gamificação do tenant
+  fastify.get('/education/badges', async (request: any, reply) => {
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
-      const res = await client.query('SELECT * FROM education_badges ORDER BY pontos DESC');
+      const res = await client.query('SELECT * FROM education_badges WHERE tenant_id = $1 ORDER BY pontos DESC', [tenantId]);
       return res.rows;
     } finally {
       client.release();
     }
   });
 
-  // Lista Biblioteca Corporativa (Busca Semântica Simulado)
-  fastify.get('/education/library', async (request, reply) => {
+  // Lista Biblioteca Corporativa do tenant
+  fastify.get('/education/library', async (request: any, reply) => {
     const { setor, query } = request.query as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
-      let queryStr = 'SELECT * FROM education_library WHERE 1=1';
-      const params: any[] = [];
-      let paramIdx = 1;
+      let queryStr = 'SELECT * FROM education_library WHERE tenant_id = $1';
+      const params: any[] = [tenantId];
+      let paramIdx = 2;
 
       if (setor && setor !== 'Diretoria Geral' && setor !== 'Qualidade e ONA') {
         queryStr += ` AND (setor = $${paramIdx} OR setor = 'Geral')`;
@@ -261,14 +354,21 @@ export default async function educationRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Analytics da Educação Corporativa
-  fastify.get('/education/analytics', async (request, reply) => {
+  // Analytics da Educação Corporativa do tenant
+  fastify.get('/education/analytics', async (request: any, reply) => {
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
-      const totalCursos = await client.query('SELECT COUNT(*) FROM education_courses WHERE ativo = TRUE');
-      const totalTrilhas = await client.query('SELECT COUNT(*) FROM education_tracks WHERE ativo = TRUE');
-      const totalCertificados = await client.query('SELECT COUNT(*) FROM education_certificates');
-      const totalColaboradores = await client.query('SELECT COUNT(*) FROM usuarios');
+      const totalCursos = await client.query('SELECT COUNT(*) FROM education_courses WHERE tenant_id = $1 AND ativo = TRUE', [tenantId]);
+      const totalTrilhas = await client.query('SELECT COUNT(*) FROM education_tracks WHERE tenant_id = $1 AND ativo = TRUE', [tenantId]);
+      
+      const totalCertificados = await client.query(`
+        SELECT COUNT(*) FROM education_certificates c
+        JOIN usuarios u ON c.usuario_email = u.email
+        WHERE u.unidade = $1
+      `, [tenantId]);
+
+      const totalColaboradores = await client.query('SELECT COUNT(*) FROM usuarios WHERE unidade = $1', [tenantId]);
 
       return {
         total_cursos: parseInt(totalCursos.rows[0].count),
@@ -290,10 +390,17 @@ export default async function educationRoutes(fastify: FastifyInstance) {
   });
 
   // IA Educacional Contextual (Recomendações e Reciclagem)
-  fastify.post('/education/ai-recommendations', async (request, reply) => {
+  fastify.post('/education/ai-recommendations', async (request: any, reply) => {
     const { email, cargo, setor, conformidade_documental } = request.body as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
+      // Validar que o usuário pertence ao mesmo tenant
+      const userCheck = await client.query('SELECT id FROM usuarios WHERE email = $1 AND unidade = $2', [email, tenantId]);
+      if (userCheck.rows.length === 0) {
+        return reply.status(404).send({ error: 'Usuário não cadastrado nesta instituição' });
+      }
+
       const recomendacoes = [];
 
       // Regra 1: Baixa conformidade documental

@@ -391,9 +391,66 @@ input:focus, select:focus, textarea:focus {
 
 /* RESPONSIVO */
 @media (max-width: 768px) {
-  .sidebar { width: 70px; }
-  .sidebar-brand span, .nav-item span { display: none; }
-  .topbar { padding: 0 1.5rem; }
-  .page-wrapper { padding: 1.5rem; }
-  .auth-card { padding: 2rem; }
+  .sidebar {
+    position: fixed !important;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 280px !important;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+  }
+  
+  .sidebar.open {
+    transform: translateX(0) !important;
+  }
+  
+  .mobile-close-btn {
+    display: block !important;
+  }
+  
+  .mobile-menu-btn {
+    display: block !important;
+  }
+  
+  .topbar-subtitle {
+    display: none !important;
+  }
+  
+  .badge-ia {
+    display: none !important;
+  }
+  
+  .topbar {
+    padding: 0 1.5rem;
+  }
+  
+  .page-wrapper {
+    padding: 1.5rem;
+  }
+  
+  .auth-card {
+    padding: 2rem;
+  }
+  
+  .main-content {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-wrapper {
+    padding: 1rem;
+  }
+  .card {
+    padding: 1.2rem;
+  }
+  .topbar {
+    padding: 0 1rem;
+  }
+  .badge-version {
+    display: none !important;
+  }
 }

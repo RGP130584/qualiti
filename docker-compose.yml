@@ -1,52 +1,72 @@
-version: '3.8'
+# ============================================================
+# QUALITI — App principal (Hardened & Configured)
+# Depende da infra compartilhada: docker-compose.shared.yml
+# Subir: docker compose up -d
+# Portas:
+#   App:   http://localhost:3000
+#   API:   http://localhost:3001
+#   Web:   http://localhost:80
+# ============================================================
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: qualitaos-postgres
-    environment:
-      POSTGRES_USER: qualita
-      POSTGRES_PASSWORD: qualita_secure_pw
-      POSTGRES_DB: qualitaos
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    restart: unless-stopped
 
   app:
     build:
       context: ./app
       dockerfile: Dockerfile
     container_name: qualitaos-app
+    restart: always
     environment:
-      - PORT=3001
-      - DATABASE_URL=postgres://qualita:qualita_secure_pw@postgres:5432/qualitaos
-      - JWT_SECRET=super_secret_qualita_jwt_key_2026_secure
-      - AI_API_KEY=mock_key_for_simulation
-      - AI_PROVIDER=mock
+      - PORT=${QUALITI_PORT:-3001}
+      - DATABASE_URL=${DATABASE_URL:-postgres://qualita:qualita_secure_pw@shared-postgres:5432/qualitaos}
+      - JWT_SECRET=${JWT_SECRET:-super_secret_qualita_jwt_key_2026_secure}
+      - AI_API_KEY=${AI_API_KEY:-mock_key_for_simulation}
+      - AI_PROVIDER=${AI_PROVIDER:-mock}
+      - OLLAMA_URL=${OLLAMA_URL:-http://shared-ollama:11434}
     ports:
-      - "3000:3000"
-      - "3001:3001"
-    depends_on:
-      - postgres
-    restart: unless-stopped
+      - "${QUALITI_FRONTEND_PORT:-3000}:3000"
+      - "${QUALITI_PORT:-3001}:3001"
+    networks:
+      - shared_net
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${QUALITI_PORT:-3001}/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   caddy:
     image: caddy:2-alpine
     container_name: qualitaos-caddy
+    restart: always
     ports:
-      - "80:80"
-      - "443:443"
+      - "${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_PORT:-443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - app
-    restart: unless-stopped
+      app:
+        condition: service_healthy
+    networks:
+      - shared_net
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
-  pgdata:
   caddy_data:
   caddy_config:
+
+networks:
+  shared_net:
+    external: true
+    name: shared_net

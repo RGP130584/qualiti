@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { CoreService } from './services';
+import { authenticate } from '../../utils/auth';
 import { 
   CoreOcorrenciaCreateSchema, CoreDocumentoCreateSchema, 
   CoreAuditoriaCreateSchema, CoreAiAgentQuerySchema 
@@ -12,79 +13,104 @@ import {
 export async function coreV2Routes(fastify: FastifyInstance) {
   const service = new CoreService();
 
+  // Helper helper to get tenant_id from request
+  const getTenantId = (request: any): string => {
+    return request.user?.unidade || 'Unidade Central';
+  };
+
   // ----------------------------------------
   // 1. OCORRÊNCIAS INTELIGENTES (RELATAR OCORRÊNCIA)
   // ----------------------------------------
-  fastify.get('/core/v2/ocorrencias', async (request, reply) => {
+  fastify.get('/core/v2/ocorrencias', { preHandler: [authenticate] }, async (request, reply) => {
     const { setor } = request.query as any;
-    return await service.listOcorrencias(setor);
+    const tenantId = getTenantId(request);
+    return await service.listOcorrencias(tenantId, setor);
   });
 
-  fastify.post('/core/v2/ocorrencias', { schema: CoreOcorrenciaCreateSchema }, async (request, reply) => {
+  fastify.post('/core/v2/ocorrencias', { 
+    preHandler: [authenticate],
+    schema: CoreOcorrenciaCreateSchema 
+  }, async (request, reply) => {
     const data = request.body as any;
-    return await service.processRelatarOcorrencia(data);
+    const tenantId = getTenantId(request);
+    return await service.processRelatarOcorrencia(tenantId, data);
   });
 
-  fastify.put('/core/v2/ocorrencias/:id/status', async (request, reply) => {
+  fastify.put('/core/v2/ocorrencias/:id/status', { preHandler: [authenticate] }, async (request, reply) => {
     const { id } = request.params as any;
     const { status, plano_capa, usuario } = request.body as any;
-    return await service.updateOcorrenciaStatus(Number(id), status, plano_capa, usuario || 'Gestor da Qualidade');
+    const tenantId = getTenantId(request);
+    return await service.updateOcorrenciaStatus(tenantId, Number(id), status, plano_capa, usuario || request.user?.nome || 'Gestor da Qualidade');
   });
 
   // ----------------------------------------
-  // 2. GESTÃO DOCUMENTAL INTELIGENTE
+  // 2. GESTÃO DOCUMENTAL INTELIGENTE (POPS CONSOLIDADO)
   // ----------------------------------------
-  fastify.get('/core/v2/documentos', async (request, reply) => {
+  fastify.get('/core/v2/documentos', { preHandler: [authenticate] }, async (request, reply) => {
     const { setor } = request.query as any;
-    return await service.listDocumentos(setor);
+    const tenantId = getTenantId(request);
+    return await service.listDocumentos(tenantId, setor);
   });
 
-  fastify.post('/core/v2/documentos', { schema: CoreDocumentoCreateSchema }, async (request, reply) => {
+  fastify.post('/core/v2/documentos', { 
+    preHandler: [authenticate],
+    schema: CoreDocumentoCreateSchema 
+  }, async (request, reply) => {
     const data = request.body as any;
-    return await service.createDocumento(data);
+    const tenantId = getTenantId(request);
+    return await service.createDocumento(tenantId, data);
   });
 
   // ----------------------------------------
   // 3. AUDITORIA INTELIGENTE
   // ----------------------------------------
-  fastify.get('/core/v2/auditorias', async (request, reply) => {
+  fastify.get('/core/v2/auditorias', { preHandler: [authenticate] }, async (request, reply) => {
     const { setor } = request.query as any;
-    return await service.listAuditorias(setor);
+    const tenantId = getTenantId(request);
+    return await service.listAuditorias(tenantId, setor);
   });
 
   // ----------------------------------------
   // 4. GESTÃO DE RISCOS
   // ----------------------------------------
-  fastify.get('/core/v2/riscos', async (request, reply) => {
+  fastify.get('/core/v2/riscos', { preHandler: [authenticate] }, async (request, reply) => {
     const { setor } = request.query as any;
-    return await service.listRiscos(setor);
+    const tenantId = getTenantId(request);
+    return await service.listRiscos(tenantId, setor);
   });
 
   // ----------------------------------------
   // 5. SEGURANÇA OPERACIONAL
   // ----------------------------------------
-  fastify.get('/core/v2/seguranca', async (request, reply) => {
+  fastify.get('/core/v2/seguranca', { preHandler: [authenticate] }, async (request, reply) => {
     const { setor } = request.query as any;
-    return await service.listSeguranca(setor);
+    const tenantId = getTenantId(request);
+    return await service.listSeguranca(tenantId, setor);
   });
 
   // ----------------------------------------
   // 6. INDICADORES & ANALYTICS
   // ----------------------------------------
-  fastify.get('/core/v2/analytics', async (request, reply) => {
-    return await service.getAnalytics();
+  fastify.get('/core/v2/analytics', { preHandler: [authenticate] }, async (request, reply) => {
+    const tenantId = getTenantId(request);
+    return await service.getAnalytics(tenantId);
   });
 
   // ----------------------------------------
   // 7. IA CORPORATIVA (6 AGENTES)
   // ----------------------------------------
-  fastify.post('/core/v2/ai/agent', { schema: CoreAiAgentQuerySchema }, async (request, reply) => {
+  fastify.post('/core/v2/ai/agent', { 
+    preHandler: [authenticate],
+    schema: CoreAiAgentQuerySchema 
+  }, async (request, reply) => {
     const { agente, prompt, usuario, contexto } = request.body as any;
-    return await service.askAiAgent(agente, prompt, usuario, contexto);
+    const tenantId = getTenantId(request);
+    return await service.askAiAgent(tenantId, agente, prompt, usuario || request.user?.nome || 'Usuário', contexto);
   });
 
-  fastify.get('/core/v2/ai/logs', async (request, reply) => {
+  fastify.get('/core/v2/ai/logs', { preHandler: [authenticate] }, async (request, reply) => {
     const { agente } = request.query as any;
-    return await service.listAiLogs(agente);
+    const tenantId = getTenantId(request);
+    return await service.listAiLogs(tenantId, agente);
   });
 }

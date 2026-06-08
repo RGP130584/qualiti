@@ -1,21 +1,34 @@
 import { FastifyInstance } from 'fastify';
 import pool from '../db';
+import { authenticate } from '../utils/auth';
+import { requireFeature } from '../utils/feature-guard';
 
 export default async function okrsRoutes(fastify: FastifyInstance) {
-  // Lista todos os OKRs com seus Key Results associados
-  fastify.get('/okrs', async (request, reply) => {
+  // Aplica autenticação e feature flag para todas as rotas deste arquivo
+  fastify.addHook('preHandler', authenticate);
+  fastify.addHook('preHandler', requireFeature('feature:okr:core'));
+
+  // Lista todos os OKRs com seus Key Results associados para o tenant
+  fastify.get('/okrs', async (request: any, reply) => {
     const { setor } = request.query as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
-      let queryStr = 'SELECT * FROM okrs ORDER BY id ASC';
-      const params: any[] = [];
+      let queryStr = 'SELECT * FROM okrs WHERE tenant_id = $1 ORDER BY id ASC';
+      const params: any[] = [tenantId];
       if (setor && setor !== 'Diretoria Geral' && setor !== 'Qualidade e ONA') {
-        queryStr = 'SELECT * FROM okrs WHERE setor = $1 OR visao_estrategica = \'3 Anos\' ORDER BY id ASC';
+        queryStr = 'SELECT * FROM okrs WHERE tenant_id = $1 AND (setor = $2 OR visao_estrategica = \'3 Anos\') ORDER BY id ASC';
         params.push(setor);
       }
       const resOkrs = await client.query(queryStr, params);
 
-      const krsRes = await client.query('SELECT * FROM key_results ORDER BY id ASC');
+      const krsRes = await client.query(`
+        SELECT kr.* FROM key_results kr
+        JOIN okrs o ON kr.okr_id = o.id
+        WHERE o.tenant_id = $1
+        ORDER BY kr.id ASC
+      `, [tenantId]);
+
       const krsMap: Record<number, any[]> = {};
       for (const kr of krsRes.rows) {
         if (!krsMap[kr.okr_id]) krsMap[kr.okr_id] = [];
@@ -31,18 +44,20 @@ export default async function okrsRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Cria um novo OKR Estratégico ou Tático
-  fastify.post('/okrs', async (request, reply) => {
+  // Cria um novo OKR Estratégico ou Tático associado ao tenant
+  fastify.post('/okrs', async (request: any, reply) => {
     const { titulo, descricao, visao_estrategica, periodo, prioridade, responsavel, setor, indicadores_vinculados } = request.body as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
       const res = await client.query(`
-        INSERT INTO okrs (titulo, descricao, visao_estrategica, periodo, prioridade, responsavel, setor, indicadores_vinculados)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO okrs (titulo, descricao, visao_estrategica, periodo, prioridade, responsavel, setor, indicadores_vinculados, tenant_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *;
       `, [
         titulo, descricao, visao_estrategica || '1 Ano', periodo || '2026', prioridade || 'Alta', 
-        responsavel || 'Gestor', setor || 'Geral', JSON.stringify(indicadores_vinculados || [])
+        responsavel || request.user.nome || 'Gestor', setor || 'Geral', JSON.stringify(indicadores_vinculados || []),
+        tenantId
       ]);
       return res.rows[0];
     } finally {
@@ -50,19 +65,26 @@ export default async function okrsRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Cria um novo Key Result (KR) para um OKR
-  fastify.post('/okrs/:okrId/krs', async (request, reply) => {
+  // Cria um novo Key Result (KR) para um OKR se pertencer ao tenant
+  fastify.post('/okrs/:okrId/krs', async (request: any, reply) => {
     const { okrId } = request.params as any;
     const { titulo, meta, valor_alvo, unidade, responsavel, setor, prazo, peso } = request.body as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
+      // Validar propriedade do OKR
+      const okrCheck = await client.query('SELECT id FROM okrs WHERE id = $1 AND tenant_id = $2', [okrId, tenantId]);
+      if (okrCheck.rows.length === 0) {
+        return reply.status(404).send({ error: 'OKR não encontrado ou não pertence a esta unidade' });
+      }
+
       const res = await client.query(`
-        INSERT INTO key_results (okr_id, titulo, meta, valor_alvo, unidade, responsavel, setor, prazo, peso)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO key_results (okr_id, titulo, meta, valor_alvo, unidade, responsavel, setor, prazo, peso, tenant_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *;
       `, [
-        okrId, titulo, meta, valor_alvo, unidade || '%', responsavel || 'Gestor', 
-        setor || 'Geral', prazo || '2026-12-31', peso || 1
+        okrId, titulo, meta, valor_alvo, unidade || '%', responsavel || request.user.nome || 'Gestor', 
+        setor || 'Geral', prazo || '2026-12-31', peso || 1, tenantId
       ]);
       return res.rows[0];
     } finally {
@@ -71,18 +93,34 @@ export default async function okrsRoutes(fastify: FastifyInstance) {
   });
 
   // Atualiza o progresso de um Key Result (KR) e recalcula o OKR pai
-  fastify.post('/krs/:id/progress', async (request, reply) => {
+  fastify.post('/krs/:id/progress', async (request: any, reply) => {
     const { id } = request.params as any;
     const { valor, nota, responsavel } = request.body as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
+      // Validar propriedade do KR e do OKR pai
+      const krCheck = await client.query(`
+        SELECT kr.id, kr.okr_id, kr.valor_alvo, o.tenant_id 
+        FROM key_results kr
+        JOIN okrs o ON kr.okr_id = o.id
+        WHERE kr.id = $1 AND o.tenant_id = $2
+      `, [id, tenantId]);
+
+      if (krCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return reply.status(404).send({ error: 'Key Result não encontrado ou não pertence a esta unidade' });
+      }
+
+      const krInfo = krCheck.rows[0];
+
       // 1. Registra o histórico de progresso
       await client.query(`
-        INSERT INTO okr_progress (kr_id, valor, nota, responsavel)
-        VALUES ($1, $2, $3, $4)
-      `, [id, valor, nota || 'Atualização de rotina', responsavel || 'Gestor']);
+        INSERT INTO okr_progress (kr_id, valor, nota, responsavel, tenant_id)
+        VALUES ($1, $2, $3, $4, $5)
+      `, [id, valor, nota || 'Atualização de rotina', responsavel || request.user.nome || 'Gestor', tenantId]);
 
       // 2. Atualiza o KR atual
       const resKr = await client.query(`
@@ -90,14 +128,9 @@ export default async function okrsRoutes(fastify: FastifyInstance) {
         SET valor_atual = $1, 
             progresso = LEAST(ROUND(($1 / valor_alvo) * 100, 2), 100.00),
             data_atualizacao = CURRENT_TIMESTAMP
-        WHERE id = $2
+        WHERE id = $2 AND tenant_id = $3
         RETURNING *;
-      `, [valor, id]);
-
-      if (resKr.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return reply.status(404).send({ error: 'Key Result não encontrado' });
-      }
+      `, [valor, id, tenantId]);
 
       const kr = resKr.rows[0];
 
@@ -115,41 +148,43 @@ export default async function okrsRoutes(fastify: FastifyInstance) {
       await client.query(`
         UPDATE okrs 
         SET progresso = $1, score = $2 
-        WHERE id = $3
-      `, [progressoOkr, scoreOkr, kr.okr_id]);
+        WHERE id = $3 AND tenant_id = $4
+      `, [progressoOkr, scoreOkr, kr.okr_id, tenantId]);
 
       await client.query('COMMIT');
       return { success: true, kr, okr_progresso: progressoOkr, okr_score: scoreOkr };
     } catch (err) {
       await client.query('ROLLBACK');
       fastify.log.error(err);
-      reply.status(500).send({ error: 'Erro ao atualizar progresso do KR' });
+      return reply.status(500).send({ error: 'Erro ao atualizar progresso do KR' });
     } finally {
       client.release();
     }
   });
 
-  // Lista os ciclos ativos de OKRs
-  fastify.get('/okr-cycles', async (request, reply) => {
+  // Lista os ciclos ativos de OKRs do tenant
+  fastify.get('/okr-cycles', async (request: any, reply) => {
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
-      const res = await client.query('SELECT * FROM okr_cycles ORDER BY data_inicio DESC');
+      const res = await client.query('SELECT * FROM okr_cycles WHERE tenant_id = $1 ORDER BY data_inicio DESC', [tenantId]);
       return res.rows;
     } finally {
       client.release();
     }
   });
 
-  // Cria um novo ciclo de OKR
-  fastify.post('/okr-cycles', async (request, reply) => {
+  // Cria um novo ciclo de OKR para o tenant
+  fastify.post('/okr-cycles', async (request: any, reply) => {
     const { nome, tipo, data_inicio, data_fim } = request.body as any;
+    const tenantId = request.user.unidade || 'Unidade Central';
     const client = await pool.connect();
     try {
       const res = await client.query(`
-        INSERT INTO okr_cycles (nome, tipo, data_inicio, data_fim, ativo)
-        VALUES ($1, $2, $3, $4, TRUE)
+        INSERT INTO okr_cycles (nome, tipo, data_inicio, data_fim, ativo, tenant_id)
+        VALUES ($1, $2, $3, $4, TRUE, $5)
         RETURNING *;
-      `, [nome, tipo || 'Trimestral', data_inicio, data_fim]);
+      `, [nome, tipo || 'Trimestral', data_inicio, data_fim, tenantId]);
       return res.rows[0];
     } finally {
       client.release();

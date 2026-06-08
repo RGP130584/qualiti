@@ -12,13 +12,13 @@ export class CoreRepository {
   // ----------------------------------------
   // OCORRÊNCIAS INTELIGENTES
   // ----------------------------------------
-  async listOcorrencias(setor?: string): Promise<CoreOcorrencia[]> {
+  async listOcorrencias(tenantId: string, setor?: string): Promise<CoreOcorrencia[]> {
     const client = await pool.connect();
     try {
-      let query = 'SELECT * FROM core_ocorrencias WHERE deleted_at IS NULL';
-      const params: any[] = [];
+      let query = 'SELECT * FROM core_ocorrencias WHERE deleted_at IS NULL AND tenant_id = $1';
+      const params: any[] = [tenantId];
       if (setor && setor !== 'Todos') {
-        query += ' AND setor = $1';
+        query += ' AND setor = $2';
         params.push(setor);
       }
       query += ' ORDER BY id DESC';
@@ -29,7 +29,7 @@ export class CoreRepository {
     }
   }
 
-  async createOcorrencia(data: CoreOcorrencia): Promise<CoreOcorrencia> {
+  async createOcorrencia(tenantId: string, data: CoreOcorrencia): Promise<CoreOcorrencia> {
     const client = await pool.connect();
     try {
       const res = await client.query(`
@@ -37,9 +37,10 @@ export class CoreRepository {
           titulo, descricao, setor, relator, ia_classificacao, 
           ia_criticidade, ia_causa_raiz, ia_previsao_risco, 
           ia_impacto_normativo, ia_acoes_recomendadas, 
-          eventos_correlacionados, plano_capa, status
+          eventos_correlacionados, plano_capa, status,
+          tipo, severidade, causa_raiz_ishikawa, plano_acao_capa, tenant_id
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
         ) RETURNING *;
       `, [
         data.titulo, data.descricao, data.setor, data.relator,
@@ -51,12 +52,17 @@ export class CoreRepository {
         JSON.stringify(data.ia_acoes_recomendadas || []),
         JSON.stringify(data.eventos_correlacionados || []),
         JSON.stringify(data.plano_capa || []),
-        data.status || 'Pendente'
+        data.status || 'Pendente',
+        data.tipo || null,
+        data.severidade || null,
+        JSON.stringify(data.causa_raiz_ishikawa || {}),
+        JSON.stringify(data.plano_acao_capa || []),
+        tenantId
       ]);
 
       await client.query(`
-        INSERT INTO auditoria_logs (usuario, acao, entidade, entidade_id)
-        VALUES ($1, 'CORE_OCORRENCIA_CREATE', 'CORE_OCORRENCIAS', $2)
+        INSERT INTO auditoria_logs (usuario, acao, entidade, entidade_id, ip)
+        VALUES ($1, 'CORE_OCORRENCIA_CREATE', 'CORE_OCORRENCIAS', $2, '127.0.0.1')
       `, [data.relator, res.rows[0].id.toString()]);
 
       return res.rows[0];
@@ -65,20 +71,39 @@ export class CoreRepository {
     }
   }
 
-  async updateOcorrenciaStatus(id: number, status: string, planoCapa: any, usuario: string): Promise<CoreOcorrencia> {
+  async updateOcorrenciaStatus(
+    tenantId: string, 
+    id: number, 
+    status: string, 
+    planoCapa: any, 
+    usuario: string, 
+    causaRaizIshikawa?: any, 
+    planoAcaoCapa?: any
+  ): Promise<CoreOcorrencia> {
     const client = await pool.connect();
     try {
       const res = await client.query(`
         UPDATE core_ocorrencias 
-        SET status = $1, plano_capa = $2, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $3 AND deleted_at IS NULL
+        SET status = $1, 
+            plano_capa = COALESCE($2, plano_capa),
+            causa_raiz_ishikawa = COALESCE($3, causa_raiz_ishikawa),
+            plano_acao_capa = COALESCE($4, plano_acao_capa),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $5 AND tenant_id = $6 AND deleted_at IS NULL
         RETURNING *;
-      `, [status, JSON.stringify(planoCapa || []), id]);
+      `, [
+        status, 
+        planoCapa ? JSON.stringify(planoCapa) : null, 
+        causaRaizIshikawa ? JSON.stringify(causaRaizIshikawa) : null,
+        planoAcaoCapa ? JSON.stringify(planoAcaoCapa) : null,
+        id, 
+        tenantId
+      ]);
 
       if (res.rows.length > 0) {
         await client.query(`
-          INSERT INTO auditoria_logs (usuario, acao, entidade, entidade_id)
-          VALUES ($1, 'CORE_OCORRENCIA_UPDATE', 'CORE_OCORRENCIAS', $2)
+          INSERT INTO auditoria_logs (usuario, acao, entidade, entidade_id, ip)
+          VALUES ($1, 'CORE_OCORRENCIA_UPDATE', 'CORE_OCORRENCIAS', $2, '127.0.0.1')
         `, [usuario, id.toString()]);
       }
 
@@ -89,15 +114,15 @@ export class CoreRepository {
   }
 
   // ----------------------------------------
-  // GESTÃO DOCUMENTAL INTELIGENTE
+  // GESTÃO DOCUMENTAL INTELIGENTE (POPS CONSOLIDADO)
   // ----------------------------------------
-  async listDocumentos(setor?: string): Promise<CoreDocumento[]> {
+  async listDocumentos(tenantId: string, setor?: string): Promise<CoreDocumento[]> {
     const client = await pool.connect();
     try {
-      let query = 'SELECT * FROM core_documentos WHERE deleted_at IS NULL';
-      const params: any[] = [];
+      let query = 'SELECT * FROM pops WHERE deleted_at IS NULL AND tenant_id = $1';
+      const params: any[] = [tenantId];
       if (setor && setor !== 'Todos') {
-        query += ' AND setor = $1';
+        query += ' AND setor = $2';
         params.push(setor);
       }
       query += ' ORDER BY id DESC';
@@ -108,15 +133,15 @@ export class CoreRepository {
     }
   }
 
-  async createDocumento(data: CoreDocumento): Promise<CoreDocumento> {
+  async createDocumento(tenantId: string, data: CoreDocumento): Promise<CoreDocumento> {
     const client = await pool.connect();
     try {
       const res = await client.query(`
-        INSERT INTO core_documentos (
+        INSERT INTO pops (
           codigo, titulo, categoria, setor, versao, conteudo, autor,
-          status_aprovacao, ocr_texto, embeddings, documentos_impactados, rastreabilidade_normas
+          status, ocr_texto, embeddings, documentos_impactados, rastreabilidade_normas, tenant_id, qrcode
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
         ) RETURNING *;
       `, [
         data.codigo, data.titulo, data.categoria, data.setor,
@@ -125,12 +150,20 @@ export class CoreRepository {
         data.ocr_texto || `[OCR] ${data.conteudo}`,
         JSON.stringify(data.embeddings || [0.01, -0.02, 0.05, 0.08]),
         JSON.stringify(data.documentos_impactados || []),
-        JSON.stringify(data.rastreabilidade_normas || [])
+        JSON.stringify(data.rastreabilidade_normas || []),
+        tenantId,
+        `QR_CORE_${data.codigo}`
       ]);
 
+      // Insere na tabela de pop_versoes
       await client.query(`
-        INSERT INTO auditoria_logs (usuario, acao, entidade, entidade_id)
-        VALUES ($1, 'CORE_DOCUMENTO_CREATE', 'CORE_DOCUMENTOS', $2)
+        INSERT INTO pop_versoes (pop_id, versao, conteudo, autor)
+        VALUES ($1, $2, $3, $4)
+      `, [res.rows[0].id, res.rows[0].versao, res.rows[0].conteudo, res.rows[0].autor]);
+
+      await client.query(`
+        INSERT INTO auditoria_logs (usuario, acao, entidade, entidade_id, ip)
+        VALUES ($1, 'CORE_DOCUMENTO_CREATE', 'POPs', $2, '127.0.0.1')
       `, [data.autor, res.rows[0].id.toString()]);
 
       return res.rows[0];
@@ -142,13 +175,13 @@ export class CoreRepository {
   // ----------------------------------------
   // AUDITORIA INTELIGENTE
   // ----------------------------------------
-  async listAuditorias(setor?: string): Promise<CoreAuditoria[]> {
+  async listAuditorias(tenantId: string, setor?: string): Promise<CoreAuditoria[]> {
     const client = await pool.connect();
     try {
-      let query = 'SELECT * FROM core_auditorias';
-      const params: any[] = [];
+      let query = 'SELECT * FROM core_auditorias WHERE tenant_id = $1';
+      const params: any[] = [tenantId];
       if (setor && setor !== 'Todos') {
-        query += ' WHERE setor = $1';
+        query += ' AND setor = $2';
         params.push(setor);
       }
       query += ' ORDER BY id DESC';
@@ -162,13 +195,13 @@ export class CoreRepository {
   // ----------------------------------------
   // GESTÃO DE RISCOS
   // ----------------------------------------
-  async listRiscos(setor?: string): Promise<CoreRisco[]> {
+  async listRiscos(tenantId: string, setor?: string): Promise<CoreRisco[]> {
     const client = await pool.connect();
     try {
-      let query = 'SELECT * FROM core_riscos';
-      const params: any[] = [];
+      let query = 'SELECT * FROM core_riscos WHERE tenant_id = $1';
+      const params: any[] = [tenantId];
       if (setor && setor !== 'Todos') {
-        query += ' WHERE setor = $1';
+        query += ' AND setor = $2';
         params.push(setor);
       }
       query += ' ORDER BY id DESC';
@@ -182,13 +215,13 @@ export class CoreRepository {
   // ----------------------------------------
   // SEGURANÇA OPERACIONAL
   // ----------------------------------------
-  async listSeguranca(setor?: string): Promise<CoreSeguranca[]> {
+  async listSeguranca(tenantId: string, setor?: string): Promise<CoreSeguranca[]> {
     const client = await pool.connect();
     try {
-      let query = 'SELECT * FROM core_seguranca';
-      const params: any[] = [];
+      let query = 'SELECT * FROM core_seguranca WHERE tenant_id = $1';
+      const params: any[] = [tenantId];
       if (setor && setor !== 'Todos') {
-        query += ' WHERE setor = $1';
+        query += ' AND setor = $2';
         params.push(setor);
       }
       query += ' ORDER BY id DESC';
@@ -202,10 +235,10 @@ export class CoreRepository {
   // ----------------------------------------
   // INDICADORES & ANALYTICS
   // ----------------------------------------
-  async getAnalytics(): Promise<CoreAnalytics> {
+  async getAnalytics(tenantId: string): Promise<CoreAnalytics> {
     const client = await pool.connect();
     try {
-      const res = await client.query('SELECT * FROM core_analytics ORDER BY id DESC LIMIT 1');
+      const res = await client.query('SELECT * FROM core_analytics WHERE tenant_id = $1 ORDER BY id DESC LIMIT 1', [tenantId]);
       return res.rows[0];
     } finally {
       client.release();
@@ -215,16 +248,17 @@ export class CoreRepository {
   // ----------------------------------------
   // LOG DE AGENTES DE IA
   // ----------------------------------------
-  async logAiAgentAction(data: CoreAiAgentLog): Promise<CoreAiAgentLog> {
+  async logAiAgentAction(tenantId: string, data: CoreAiAgentLog): Promise<CoreAiAgentLog> {
     const client = await pool.connect();
     try {
       const res = await client.query(`
-        INSERT INTO core_ai_logs (agente, usuario, contexto, prompt, resposta, acoes_recomendadas)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO core_ai_logs (agente, usuario, contexto, prompt, resposta, acoes_recomendadas, tenant_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING *;
       `, [
         data.agente, data.usuario, data.contexto, data.prompt, data.resposta,
-        JSON.stringify(data.acoes_recomendadas || [])
+        JSON.stringify(data.acoes_recomendadas || []),
+        tenantId
       ]);
       return res.rows[0];
     } finally {
@@ -232,13 +266,13 @@ export class CoreRepository {
     }
   }
 
-  async listAiLogs(agente?: string): Promise<CoreAiAgentLog[]> {
+  async listAiLogs(tenantId: string, agente?: string): Promise<CoreAiAgentLog[]> {
     const client = await pool.connect();
     try {
-      let query = 'SELECT * FROM core_ai_logs';
-      const params: any[] = [];
+      let query = 'SELECT * FROM core_ai_logs WHERE tenant_id = $1';
+      const params: any[] = [tenantId];
       if (agente && agente !== 'Todos') {
-        query += ' WHERE agente = $1';
+        query += ' AND agente = $2';
         params.push(agente);
       }
       query += ' ORDER BY id DESC';

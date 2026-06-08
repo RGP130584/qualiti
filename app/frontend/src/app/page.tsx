@@ -135,7 +135,7 @@ export default function DashboardPage() {
       {/* ========================================== */}
       {/* GRID DE CARDS DE METRICAS (WIDGETS INTELIGENTES) */}
       {/* ========================================== */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
         {/* WIDGET 1: GESTÃO DOCUMENTAL INTELIGENTE */}
         <div className="card" style={{ borderTop: '4px solid #10b981', background: 'white', padding: '2rem', borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2rem' }}>
@@ -202,7 +202,7 @@ export default function DashboardPage() {
       {/* ========================================== */}
       {/* SEÇÃO PRINCIPAL DE WIDGETS E INSIGHTS VIVOS */}
       {/* ========================================== */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))', gap: '2.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2.5rem' }}>
         {/* COLUNA ESQUERDA: AUDITOR VIRTUAL IA E ALERTAS INTELIGENTES */}
         <div className="card" style={{ padding: 0, overflow: 'hidden', background: 'white', borderRadius: '20px', boxShadow: '0 4px 15px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0' }}>
           <div className="card-header" style={{ padding: '2rem 2.5rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -350,7 +350,7 @@ export default function IndicatorsPage() {
       )}
 
       {/* CARDS DE INDICADORES (GRID VIBRANTE) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
         {loading && indicadores.length === 0 ? (
           <div style={{ padding: '2rem', textAlign: 'center' }}>Carregando biblioteca de indicadores...</div>
         ) : indicadores.filter(ind => filtroSetor === 'Todos' || ind.setor === filtroSetor).map(ind => {

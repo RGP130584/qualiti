@@ -107,14 +107,17 @@ A plataforma foi projetada para inicialização imediata e autossuficiente atrav
 - Git
 
 ### 2. Subindo a Plataforma em Produção / Desenvolvimento
-Para compilar as imagens do monorepo e subir os serviços em background com recriação limpa:
+A arquitetura agora faz parte de um ecossistema maior, exigindo que a infraestrutura compartilhada (banco de dados e Ollama) suba primeiro.
 
+Para subir todo o ecossistema (Qualiti, Gestalt e LexGrid) de forma unificada no Windows:
+```powershell
+# Na raiz da pasta de projetos, execute o script mestre:
+.\start-all.ps1
+```
+
+Se precisar subir apenas o QualitiOS (certifique-se de que o `docker-compose.shared.yml` já está rodando):
 ```bash
-# 1. Faça o clone do repositório
-git clone https://github.com/RGP130584/qualiti.git
 cd qualiti
-
-# 2. Compile e inicie os containers
 docker compose up -d --build --force-recreate
 ```
 
@@ -132,7 +135,7 @@ Assim que os containers estiverem Up, o Caddy Gateway irá rotear o tráfego aut
 
 ## 🔐 Contas de Acesso Padrão (RBAC Seed)
 
-Para fins de auditoria e validação de segregação de acesso, o banco de dados é inicializado com as seguintes credenciais de teste (Senha padrão para todos: `hashed_secure_password_123`):
+Para fins de auditoria e validação de segregação de acesso, o banco de dados é inicializado com as seguintes credenciais de teste (Senha padrão para todos: `admin123`):
 
 | Usuário / Perfil | E-mail de Acesso | Cargo / Role RBAC | Setor / Departamento | Visibilidade |
 | :--- | :--- | :--- | :--- | :--- |

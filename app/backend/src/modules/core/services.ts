@@ -1,5 +1,6 @@
 import { CoreRepository } from './repositories';
 import { CoreOcorrencia, CoreDocumento, CoreAiAgentLog } from './models';
+import { eventBus } from '../../utils/event-bus';
 
 // ==========================================
 // SERVICES & AI AGENTS: CORE PLATFORM
@@ -11,7 +12,7 @@ export class CoreService {
   // ----------------------------------------
   // OCORRÊNCIAS INTELIGENTES (IA-FIRST)
   // ----------------------------------------
-  async processRelatarOcorrencia(data: CoreOcorrencia): Promise<CoreOcorrencia> {
+  async processRelatarOcorrencia(tenantId: string, data: CoreOcorrencia): Promise<CoreOcorrencia> {
     const texto = `${data.titulo} ${data.descricao}`.toLowerCase();
 
     // 1. Classificação IA Automática
@@ -66,40 +67,54 @@ export class CoreService {
       status: 'Em Investigação IA'
     };
 
-    return await this.repo.createOcorrencia(novaOcorrencia);
+    const occurrence = await this.repo.createOcorrencia(tenantId, novaOcorrencia);
+
+    // Dispara evento de registro de incidente de forma assíncrona
+    eventBus.publish('IncidenteRegistrado', {
+      id: occurrence.id,
+      tenant_id: tenantId,
+      titulo: occurrence.titulo,
+      descricao: occurrence.descricao,
+      setor: occurrence.setor,
+      relator: occurrence.relator,
+      tipo: occurrence.tipo,
+      severidade: occurrence.severidade
+    });
+
+    return occurrence;
   }
 
-  async listOcorrencias(setor?: string) {
-    return await this.repo.listOcorrencias(setor);
+  async listOcorrencias(tenantId: string, setor?: string) {
+    return await this.repo.listOcorrencias(tenantId, setor);
   }
 
-  async updateOcorrenciaStatus(id: number, status: string, planoCapa: any, usuario: string) {
-    return await this.repo.updateOcorrenciaStatus(id, status, planoCapa, usuario);
+  async updateOcorrenciaStatus(tenantId: string, id: number, status: string, planoCapa: any, usuario: string, causaRaizIshikawa?: any, planoAcaoCapa?: any) {
+    return await this.repo.updateOcorrenciaStatus(tenantId, id, status, planoCapa, usuario, causaRaizIshikawa, planoAcaoCapa);
   }
 
   // ----------------------------------------
-  // GESTÃO DOCUMENTAL INTELIGENTE (OCR & RAG)
+  // GESTÃO DOCUMENTAL INTELIGENTE (POPS CONSOLIDADO)
   // ----------------------------------------
-  async createDocumento(data: CoreDocumento) {
-    return await this.repo.createDocumento(data);
+  async createDocumento(tenantId: string, data: CoreDocumento) {
+    return await this.repo.createDocumento(tenantId, data);
   }
 
-  async listDocumentos(setor?: string) {
-    return await this.repo.listDocumentos(setor);
+  async listDocumentos(tenantId: string, setor?: string) {
+    return await this.repo.listDocumentos(tenantId, setor);
   }
 
   // ----------------------------------------
   // AUDITORIA, RISCOS, SEGURANÇA E ANALYTICS
   // ----------------------------------------
-  async listAuditorias(setor?: string) { return await this.repo.listAuditorias(setor); }
-  async listRiscos(setor?: string) { return await this.repo.listRiscos(setor); }
-  async listSeguranca(setor?: string) { return await this.repo.listSeguranca(setor); }
-  async getAnalytics() { return await this.repo.getAnalytics(); }
+  async listAuditorias(tenantId: string, setor?: string) { return await this.repo.listAuditorias(tenantId, setor); }
+  async listRiscos(tenantId: string, setor?: string) { return await this.repo.listRiscos(tenantId, setor); }
+  async listSeguranca(tenantId: string, setor?: string) { return await this.repo.listSeguranca(tenantId, setor); }
+  async getAnalytics(tenantId: string) { return await this.repo.getAnalytics(tenantId); }
 
   // ----------------------------------------
   // IA CORPORATIVA: 6 AGENTES INSTITUCIONAIS
   // ----------------------------------------
-  async askAiAgent(agente: string, prompt: string, usuario: string, contexto: string): Promise<CoreAiAgentLog> {
+  async askAiAgent(tenantId: string, agente: string, prompt: string, usuario: string, contexto: string): Promise<CoreAiAgentLog> {
     let resposta = '';
     let acoes_recomendadas: any[] = [];
 
@@ -165,10 +180,10 @@ export class CoreService {
       acoes_recomendadas
     };
 
-    return await this.repo.logAiAgentAction(logEntry);
+    return await this.repo.logAiAgentAction(tenantId, logEntry);
   }
 
-  async listAiLogs(agente?: string) {
-    return await this.repo.listAiLogs(agente);
+  async listAiLogs(tenantId: string, agente?: string) {
+    return await this.repo.listAiLogs(tenantId, agente);
   }
 }

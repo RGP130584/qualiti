@@ -1,0 +1,40 @@
+name: TPM Continuous Quality Gate
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  tpm-validation:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Código-Fonte
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Necessário para git diff contra a branch base
+
+    - name: Instalar Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-dir: '20'
+        cache: 'npm'
+        cache-dependency-path: 'tpm/package-lock.json'
+
+    - name: Instalar Dependências do TPM
+      run: |
+        cd tpm
+        npm install
+
+    - name: Compilar utilitário TPM
+      run: |
+        cd tpm
+        npm run build
+
+    - name: Executar Validação de Governança TPM
+      env:
+        JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      run: |
+        node tpm/dist/index.js
